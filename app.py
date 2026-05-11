@@ -232,10 +232,8 @@ categorized = engine.categorize_batch(parsed_t12['line_items'])
 
 st.markdown("**Review and adjust categories:**")
 
-if 'edited_categories' not in st.session_state:
-    st.session_state.edited_categories = {}
-
 edited_items = []
+item_idx = 0
 
 for item in categorized:
     if item['is_subtotal'] or item['is_section_header']:
@@ -255,7 +253,7 @@ for item in categorized:
             "Category",
             options=list(engine.CATEGORY_RULES.keys()),
             index=list(engine.CATEGORY_RULES.keys()).index(current_cat) if current_cat in engine.CATEGORY_RULES else 0,
-            key=f"cat_{item['label']}",
+            key=f"cat_{item_idx}_{hash(item['label']) % 10000}",
             label_visibility="collapsed"
         )
 
@@ -267,6 +265,8 @@ for item in categorized:
         'category': selected,
         'values': item['values']
     })
+
+    item_idx += 1
 
 st.session_state.t12_categorized = edited_items
 
