@@ -274,6 +274,42 @@ with col_rr_section:
             vacant = rr_summary['total_units'] - rented
             st.metric("Vacant", vacant)
 
+    # Column Mapping Section
+    st.markdown("**Column Mapping**")
+    st.caption("Adjust any incorrect auto-detected columns")
+
+    col_mappings = rr_summary.get('column_mappings', {})
+    available_cols = rr_summary['columns']
+
+    mapping_config = {
+        'Unit Number': col_mappings.get('unit_number', 'Not detected'),
+        'Unit Type / Floor Plan': col_mappings.get('unit_type', 'Not detected'),
+        'Sq Ft': col_mappings.get('sqft', 'Not detected'),
+        'Resident Name': col_mappings.get('resident_name', 'Not detected'),
+        'Market Rent': col_mappings.get('market_rent', 'Not detected'),
+        'Actual Rent': col_mappings.get('actual_rent', 'Not detected'),
+    }
+
+    col_m1, col_m2 = st.columns(2)
+
+    for idx, (field, detected) in enumerate(mapping_config.items()):
+        if idx % 2 == 0:
+            with col_m1:
+                st.selectbox(
+                    field,
+                    options=available_cols,
+                    index=available_cols.index(detected) if detected in available_cols else 0,
+                    key=f"rr_map_{field}"
+                )
+        else:
+            with col_m2:
+                st.selectbox(
+                    field,
+                    options=available_cols,
+                    index=available_cols.index(detected) if detected in available_cols else 0,
+                    key=f"rr_map_{field}"
+                )
+
     # RR Data Preview
     st.markdown("**Data Preview:**")
     st.dataframe(
