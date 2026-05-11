@@ -45,32 +45,22 @@ st.markdown("**T12 + RR Processing → Trend Health Score**")
 @st.cache_resource
 def load_ths_template():
     """Load pre-loaded THS template from templates folder."""
-    # Try multiple path variations for Streamlit Cloud compatibility
-    paths_to_try = [
-        "templates/THS_Template_Default.xlsx",
-        "./templates/THS_Template_Default.xlsx",
-        os.path.join(os.getcwd(), "templates", "THS_Template_Default.xlsx"),
-        os.path.join(os.path.dirname(__file__), "templates", "THS_Template_Default.xlsx"),
-    ]
+    # Try primary path first (fastest for Streamlit Cloud)
+    template_path = "templates/THS_Template_Default.xlsx"
 
-    for template_path in paths_to_try:
-        if os.path.exists(template_path):
-            try:
-                return openpyxl.load_workbook(template_path)
-            except Exception as e:
-                st.error(f"Error loading template from {template_path}: {str(e)}")
-                return None
+    if os.path.exists(template_path):
+        try:
+            return openpyxl.load_workbook(template_path)
+        except Exception as e:
+            return None
 
-    # If no path worked, show error with debugging info
-    st.error(f"❌ Template not found in any of these locations:")
-    for path in paths_to_try:
-        st.error(f"  - {path}")
-    st.error(f"Current working directory: {os.getcwd()}")
+    # If not found, return None quickly (don't hang)
     return None
 
 ths_template = load_ths_template()
 if ths_template is None:
-    st.error("❌ THS Template not found. Please add to templates/ folder.")
+    st.error("❌ THS Template not found at: templates/THS_Template_Default.xlsx")
+    st.info("Make sure you uploaded the template file to the templates/ folder on GitHub.")
     st.stop()
 
 # ============================================================================
