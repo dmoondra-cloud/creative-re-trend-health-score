@@ -11,6 +11,7 @@ Rebuilt with:
 """
 
 import io
+import os
 import streamlit as st
 import pandas as pd
 import openpyxl
@@ -42,31 +43,31 @@ st.markdown("**T12 + RR Processing → Trend Health Score**")
 # ============================================================================
 
 @st.cache_resource
-   def load_ths_template():
-       """Load pre-loaded THS template from templates folder."""
-       import os
+def load_ths_template():
+    """Load pre-loaded THS template from templates folder."""
+    # Try multiple path variations for Streamlit Cloud compatibility
+    paths_to_try = [
+        "templates/THS_Template_Default.xlsx",
+        "./templates/THS_Template_Default.xlsx",
+        os.path.join(os.getcwd(), "templates", "THS_Template_Default.xlsx"),
+        os.path.join(os.path.dirname(__file__), "templates", "THS_Template_Default.xlsx"),
+    ]
 
-       # Try multiple path variations
-       paths_to_try = [
-           "templates/THS_Template_Default.xlsx",
-           "./templates/THS_Template_Default.xlsx",
-           os.path.join(os.getcwd(), "templates", "THS_Template_Default.xlsx"),
-           os.path.join(os.path.dirname(__file__), "templates", "THS_Template_Default.xlsx"),
-       ]
+    for template_path in paths_to_try:
+        if os.path.exists(template_path):
+            try:
+                return openpyxl.load_workbook(template_path)
+            except Exception as e:
+                st.error(f"Error loading template from {template_path}: {str(e)}")
+                return None
 
-       for template_path in paths_to_try:
-           if os.path.exists(template_path):
-               try:
-                   return openpyxl.load_workbook(template_path)
-               except Exception as e:
-                   st.error(f"Error loading template from {template_path}: {str(e)}")
-                   return None
+    # If no path worked, show error with debugging info
+    st.error(f"❌ Template not found in any of these locations:")
+    for path in paths_to_try:
+        st.error(f"  - {path}")
+    st.error(f"Current working directory: {os.getcwd()}")
+    return None
 
-       # If no path worked, show error with debugging info
-       st.error(f"Template not found. Tried: {paths_to_try}")
-       st.error(f"Current working directory: {os.getcwd()}")
-       return None
-       
 ths_template = load_ths_template()
 if ths_template is None:
     st.error("❌ THS Template not found. Please add to templates/ folder.")
@@ -330,7 +331,7 @@ if st.session_state.get('generate_ths', False):
         for idx, item in enumerate(st.session_state.get('t12_categorized', []), start=9):
             processor.ws.cell(idx, 4).value = item['label']  # Particulars
             processor.ws.cell(idx, 3).value = item['category']  # Category
-            
+
             for col_idx, val in enumerate(item['values'][:12], start=5):
                 processor.ws.cell(idx, col_idx).value = val
 
