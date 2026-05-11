@@ -250,38 +250,39 @@ for item in categorized:
     })
     item_idx += 1
 
-# Mark where Income ends / NOI begins
-st.markdown("**Select where Income ends and NOI begins:**")
+# Create table with proper formatting
+st.markdown("---")
 
-col_marker, col_blank = st.columns([3, 2])
-with col_marker:
-    income_end_idx = st.selectbox(
-        "Income Ends After:",
-        options=[f"Item {i+1}: {row['line_item'][:40]}" for i, row in enumerate(table_data)],
-        index=0,
-        help="Select the last item that is part of Gross Income. Everything after is NOI."
-    )
-
-# Extract the selected index
-income_end_position = int(income_end_idx.split(":")[0].replace("Item ", "")) - 1
+# Table header
+header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([1.2, 2.5, 1.3, 1.5, 1.5, 0.8])
+with header_col1:
+    st.markdown("**Income/NOI**")
+with header_col2:
+    st.markdown("**Line Item**")
+with header_col3:
+    st.markdown("**Amount**")
+with header_col4:
+    st.markdown("**Category**")
+with header_col5:
+    st.markdown("**Type**")
+with header_col6:
+    st.markdown("**Multiplier**")
 
 st.markdown("---")
-st.markdown("**Line Item | Amount | Category | Multiplier**")
 
+# Table rows
 edited_items = []
 for idx, row in enumerate(table_data):
-    # Determine if this is Income or NOI
-    if idx <= income_end_position:
-        section_type = "Income"
-        section_marker = "💰"
-    else:
-        section_type = "NOI"
-        section_marker = "📉"
-
-    col1, col2, col3, col4, col5 = st.columns([0.5, 2.5, 1.2, 1.8, 0.8])
+    col1, col2, col3, col4, col5, col6 = st.columns([1.2, 2.5, 1.3, 1.5, 1.5, 0.8])
 
     with col1:
-        st.write(section_marker)
+        selected_type = st.selectbox(
+            "Section",
+            options=['Income', 'NOI'],
+            index=0,
+            key=f"section_{idx}_{hash(row['line_item']) % 10000}",
+            label_visibility="collapsed"
+        )
 
     with col2:
         st.write(f"`{row['line_item'][:40]}`")
@@ -299,13 +300,16 @@ for idx, row in enumerate(table_data):
         )
 
     with col5:
+        st.write(f"`{row['income_expense_type']}`")
+
+    with col6:
         st.write(f"`{row['multiplier']}`")
 
     edited_items.append({
         'label': row['line_item'],
         'amount': row['amount'],
         'category': selected_cat,
-        'section_type': section_type,
+        'section_type': selected_type,
         'multiplier': row['multiplier'],
         'values': table_data[idx]
     })
