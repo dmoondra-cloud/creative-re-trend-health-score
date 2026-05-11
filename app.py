@@ -82,19 +82,16 @@ col1, col2 = st.columns(2)
 
 with col1:
     property_name = st.text_input(
-        "Property Name *",
-        placeholder="e.g., Woodward Park"
+        "Property Name *"
     )
 
 with col2:
     property_address = st.text_input(
-        "Property Address *",
-        placeholder="e.g., 111 NW 63rd Ave, Bentonville, AR 72713"
+        "Property Address *"
     )
 
 property_url = st.text_input(
-    "Apartments.com URL (optional)",
-    placeholder="https://www.apartments.com/..."
+    "Apartments.com URL (optional)"
 )
 
 if not property_name or not property_address:
@@ -139,8 +136,7 @@ with col_floorplans:
     st.markdown("**Floor Plan Sizes** (optional)")
     floor_plans_text = st.text_area(
         "Enter one per line: '2 BR: 904' or '3 BR: 1101, 1194'",
-        height=100,
-        placeholder="2 BR: 904\n3 BR: 1101, 1194\n4 BR: 1327"
+        height=100
     )
 
 if not t12_file or not rr_file:
