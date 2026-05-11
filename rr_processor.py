@@ -1,5 +1,5 @@
 """
-Rent Roll processor - handles RR loading and analysis.
+Rent Roll processor - handles RR loading, column detection, and analysis.
 """
 
 import pandas as pd
@@ -8,12 +8,13 @@ from typing import Dict, List, Optional
 
 
 class RRProcessor:
-    """Processes Rent Roll data."""
+    """Processes Rent Roll data with intelligent column mapping."""
 
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.rr_data = None
         self.units_summary = None
+        self.column_mappings = {}
 
     def load_rr(self) -> pd.DataFrame:
         """Load Rent Roll from Excel file."""
@@ -27,6 +28,7 @@ class RRProcessor:
                     df = pd.read_excel(self.file_path, sheet_name=sheet)
                     if len(df) > 0:
                         self.rr_data = df
+                        self._detect_columns()
                         return df
                 except:
                     continue
@@ -35,10 +37,59 @@ class RRProcessor:
                 # Fallback: read first sheet
                 df = pd.read_excel(self.file_path)
                 self.rr_data = df
+                self._detect_columns()
                 return df
 
         except Exception as e:
             raise ValueError(f"Could not load Rent Roll: {str(e)}")
+
+    def _detect_columns(self) -> Dict:
+        """Auto-detect common column mappings."""
+        if self.rr_data is None:
+            return {}
+
+        columns = list(self.rr_data.columns)
+
+        # Define patterns for column detection
+        patterns = {
+            'unit_number': ['unit', 'unit no', 'unit #', 'unit number'],
+            'unit_type': ['type', 'floorplan', 'floor plan', 'bd', 'br', 'bedroom'],
+            'sqft': ['sqft', 'sq ft', 'square feet', 'size'],
+            'resident_name': ['tenant', 'resident', 'name', 'lessee'],
+            'market_rent': ['market', 'market rent', 'market rate'],
+            'actual_rent': ['rent', 'actual rent', 'lease rent', 'monthly rent'],
+            'status': ['status', 'occupancy', 'occupied'],
+            'lease_start': ['lease start', 'start date', 'move in'],
+            'lease_end': ['lease end', 'end date', 'move out']
+        }
+
+        # Auto-detect columns
+        detected = {}
+        for field, keywords in patterns.items():
+            for col in columns:
+                col_lower = col.lower()
+                for keyword in keywords:
+                    if keyword in col_lower:
+                        detected[field] = col
+                        break
+                if field in detected:
+                    break
+
+        self.column_mappings = detected
+        return detected
+
+    def get_column_suggestions(self) -> Dict:
+        """Get auto-detected and all available columns for mapping."""
+        if self.rr_data is None:
+            self.load_rr()
+
+        available_columns = list(self.rr_data.columns)
+
+        return {
+            'detected': self.column_mappings,
+            'available': available_columns,
+            'header_row': 0
+        }
 
     def get_summary(self) -> Dict:
         """Get summary statistics from Rent Roll."""
@@ -50,32 +101,41 @@ class RRProcessor:
         summary = {
             'total_units': len(df),
             'columns': list(df.columns),
-            'data': df
+            'data': df,
+            'column_mappings': self.column_mappings
         }
 
-        # Try to extract unit status
-        status_column = None
-        for col in ['Status', 'status', 'Unit Status', 'Occupancy']:
-            if col in df.columns:
-                status_column = col
-                break
-
-        if status_column:
-            summary['occupancy_stats'] = df[status_column].value_counts().to_dict()
+        # Try to extract occupancy stats
+        status_col = self.column_mappings.get('status')
+        if status_col and status_col in df.columns:
+            summary['occupancy_stats'] = df[status_col].value_counts().to_dict()
+        else:
+            # Try fallback
+            for col in ['Status', 'status', 'Unit Status', 'Occupancy']:
+                if col in df.columns:
+                    summary['occupancy_stats'] = df[col].value_counts().to_dict()
+                    break
 
         return summary
 
     def get_gpr_from_rr(self) -> float:
-        """Extract GPR from Rent Roll data."""
+        """Extract GPR from Rent Roll data using mapped columns."""
         if self.rr_data is None:
             self.load_rr()
 
-        # Look for rent columns
+        # Look for mapped rent columns
+        rent_col = self.column_mappings.get('actual_rent')
+        if rent_col and rent_col in self.rr_data.columns:
+            try:
+                return pd.to_numeric(self.rr_data[rent_col], errors='coerce').sum()
+            except:
+                pass
+
+        # Fallback: search all columns
         rent_columns = [col for col in self.rr_data.columns
                        if 'rent' in col.lower() or 'rate' in col.lower()]
 
         if rent_columns:
-            # Sum all rent columns
             total_gpr = 0
             for col in rent_columns:
                 try:
@@ -101,10 +161,10 @@ class RRProcessor:
             self.load_rr()
 
         # Check for expected columns
-        expected_cols = ['Unit No', 'Unit Type', 'Status', 'Rent']
-        for col in expected_cols:
-            if not any(col.lower() in str(c).lower() for c in self.rr_data.columns):
-                issues['missing_columns'].append(col)
+        expected_cols = ['unit_number', 'unit_type', 'status', 'actual_rent']
+        for col_field in expected_cols:
+            if col_field not in self.column_mappings:
+                issues['missing_columns'].append(col_field)
 
         # Check for empty rows
         empty_count = self.rr_data.isna().sum().sum()
