@@ -183,7 +183,7 @@ st.title("📊 T12 Categorization Tool")
 st.markdown("**Upload raw T12 → Auto-categorize → Review & Export**")
 
 # ────────────────────────────────────────────────────────────────────────────
-# STEP 1: UPLOAD
+# UPLOAD T12
 # ────────────────────────────────────────────────────────────────────────────
 
 st.header("📁 Upload T12 Statement")
@@ -196,12 +196,6 @@ t12_file = st.file_uploader(
 if not t12_file:
     st.warning("⚠️ Please upload a T12 file to continue")
     st.stop()
-
-# ────────────────────────────────────────────────────────────────────────────
-# STEP 2: PARSE
-# ────────────────────────────────────────────────────────────────────────────
-
-st.header("⚙️ Parse & Categorize")
 
 try:
     with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
@@ -220,19 +214,18 @@ except Exception as e:
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────────────
-# STEP 3: CATEGORIZE
+# CATEGORISATION
 # ────────────────────────────────────────────────────────────────────────────
 
-st.header("📋 Review & Edit Categories")
+st.header("📋 Categorisation")
 
 st.caption(f"**Property:** {parsed_t12['property_name']} | **Period:** {parsed_t12['period']}")
 
 engine = CategorizationEngine()
 categorized = engine.categorize_batch(parsed_t12['line_items'])
 
-st.markdown("**Review and adjust categories:**")
-
-edited_items = []
+# Prepare table data
+table_data = []
 item_idx = 0
 
 for item in categorized:
@@ -240,52 +233,98 @@ for item in categorized:
         continue
 
     total_val = sum(item['values']) if 'values' in item else 0
-    multiplier = " 🔄" if ('utility' in item['label'].lower() or 'rubs' in item['label'].lower()) and total_val < 0 else ""
 
-    col_label, col_category, col_value = st.columns([2, 1.5, 1])
+    # Detect multiplier
+    multiplier_text = "×1"
+    if total_val != 0:
+        if ('utility' in item['label'].lower() or 'rubs' in item['label'].lower()) and total_val < 0:
+            multiplier_text = "×-1"
 
-    with col_label:
-        st.markdown(f"`{item['label'][:50]}`")
+    table_data.append({
+        'idx': item_idx,
+        'amount': total_val,
+        'line_item': item['label'],
+        'category': item['category'],
+        'income_expense_type': 'Income' if item['type'] == 'income' else 'Expense',
+        'multiplier': multiplier_text
+    })
+    item_idx += 1
 
-    with col_category:
-        current_cat = item['category']
-        selected = st.selectbox(
+# Mark where Income ends / NOI begins
+st.markdown("**Select where Income ends and NOI begins:**")
+
+col_marker, col_blank = st.columns([3, 2])
+with col_marker:
+    income_end_idx = st.selectbox(
+        "Income Ends After:",
+        options=[f"Item {i+1}: {row['line_item'][:40]}" for i, row in enumerate(table_data)],
+        index=0,
+        help="Select the last item that is part of Gross Income. Everything after is NOI."
+    )
+
+# Extract the selected index
+income_end_position = int(income_end_idx.split(":")[0].replace("Item ", "")) - 1
+
+st.markdown("---")
+st.markdown("**Line Item | Amount | Category | Multiplier**")
+
+edited_items = []
+for idx, row in enumerate(table_data):
+    # Determine if this is Income or NOI
+    if idx <= income_end_position:
+        section_type = "Income"
+        section_marker = "💰"
+    else:
+        section_type = "NOI"
+        section_marker = "📉"
+
+    col1, col2, col3, col4, col5 = st.columns([0.5, 2.5, 1.2, 1.8, 0.8])
+
+    with col1:
+        st.write(section_marker)
+
+    with col2:
+        st.write(f"`{row['line_item'][:40]}`")
+
+    with col3:
+        st.write(f"**{row['amount']:,.0f}**")
+
+    with col4:
+        selected_cat = st.selectbox(
             "Category",
             options=list(engine.CATEGORY_RULES.keys()),
-            index=list(engine.CATEGORY_RULES.keys()).index(current_cat) if current_cat in engine.CATEGORY_RULES else 0,
-            key=f"cat_{item_idx}_{hash(item['label']) % 10000}",
+            index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
+            key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
             label_visibility="collapsed"
         )
 
-    with col_value:
-        st.markdown(f"**{total_val:,.0f}**{multiplier}")
+    with col5:
+        st.write(f"`{row['multiplier']}`")
 
     edited_items.append({
-        'label': item['label'],
-        'category': selected,
-        'values': item['values']
+        'label': row['line_item'],
+        'amount': row['amount'],
+        'category': selected_cat,
+        'section_type': section_type,
+        'multiplier': row['multiplier'],
+        'values': table_data[idx]
     })
 
-    item_idx += 1
-
 st.session_state.t12_categorized = edited_items
-
-# ────────────────────────────────────────────────────────────────────────────
-# STEP 4: SUMMARY & EXPORT
-# ────────────────────────────────────────────────────────────────────────────
 
 st.markdown("---")
 st.header("✅ Summary")
 
 col_a, col_b, col_c = st.columns(3)
 with col_a:
-    st.metric("Line Items", len([i for i in categorized if not i['is_section_header']]))
+    st.metric("Total Line Items", len(edited_items))
 with col_b:
-    st.metric("Income", len(set(i['category'] for i in categorized if i['type'] == 'income')))
+    income_count = len([i for i in edited_items if i['section_type'] == 'Income'])
+    st.metric("💰 Income Items", income_count)
 with col_c:
-    st.metric("Expense", len(set(i['category'] for i in categorized if i['type'] == 'expense')))
+    noi_count = len([i for i in edited_items if i['section_type'] == 'NOI'])
+    st.metric("📉 NOI Items", noi_count)
 
-# Export
 st.markdown("---")
 st.subheader("📥 Export Categorized T12")
 
@@ -294,8 +333,10 @@ if st.button("✅ Export as CSV", use_container_width=True, type="primary"):
     for item in st.session_state.get('t12_categorized', []):
         export_data.append({
             'Line Item': item['label'],
+            'Amount': item['amount'],
             'Category': item['category'],
-            'Total Value': sum(item['values']) if 'values' in item else 0
+            'Section': item['section_type'],
+            'Multiplier': item['multiplier']
         })
 
     df_export = pd.DataFrame(export_data)
