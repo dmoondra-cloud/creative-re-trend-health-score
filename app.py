@@ -250,11 +250,13 @@ for item in categorized:
     })
     item_idx += 1
 
-# Create table with proper formatting
+# STEP 1: Mark Income/NOI sections
 st.markdown("---")
+st.subheader("STEP 1: Mark Income/NOI Sections")
+st.markdown("**Select "-", "Total Income", or "NOI" for each line item**")
 
-# Table header
-header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([1.2, 2.5, 1.3, 1.5, 1.5, 0.8])
+# Table header for section marking
+header_col1, header_col2, header_col3, header_col4 = st.columns([1.2, 3.0, 1.5, 1.0])
 with header_col1:
     st.markdown("**Income/NOI**")
 with header_col2:
@@ -262,23 +264,19 @@ with header_col2:
 with header_col3:
     st.markdown("**Amount**")
 with header_col4:
-    st.markdown("**Category**")
-with header_col5:
-    st.markdown("**Type**")
-with header_col6:
     st.markdown("**Multiplier**")
 
 st.markdown("---")
 
-# Table rows
-edited_items = []
+# Table rows - Step 1: Mark sections only
+section_selections = []
 for idx, row in enumerate(table_data):
-    col1, col2, col3, col4, col5, col6 = st.columns([1.2, 2.5, 1.3, 1.5, 1.5, 0.8])
+    col1, col2, col3, col4 = st.columns([1.2, 3.0, 1.5, 1.0])
 
     with col1:
-        selected_type = st.selectbox(
+        selected_section = st.selectbox(
             "Section",
-            options=['Income', 'NOI'],
+            options=['-', 'Total Income', 'NOI'],
             index=0,
             key=f"section_{idx}_{hash(row['line_item']) % 10000}",
             label_visibility="collapsed"
@@ -291,68 +289,181 @@ for idx, row in enumerate(table_data):
         st.write(f"**{row['amount']:,.0f}**")
 
     with col4:
-        selected_cat = st.selectbox(
-            "Category",
-            options=list(engine.CATEGORY_RULES.keys()),
-            index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
-            key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
-            label_visibility="collapsed"
-        )
-
-    with col5:
-        st.write(f"`{row['income_expense_type']}`")
-
-    with col6:
         st.write(f"`{row['multiplier']}`")
 
-    edited_items.append({
-        'label': row['line_item'],
-        'amount': row['amount'],
-        'category': selected_cat,
-        'section_type': selected_type,
-        'multiplier': row['multiplier'],
-        'values': table_data[idx]
+    section_selections.append({
+        'section': selected_section,
+        'data': row
     })
 
-st.session_state.t12_categorized = edited_items
-
+# Store section selections and show "Run Categorisation" button
 st.markdown("---")
-st.header("✅ Summary")
 
-col_a, col_b, col_c = st.columns(3)
-with col_a:
-    st.metric("Total Line Items", len(edited_items))
-with col_b:
-    income_count = len([i for i in edited_items if i['section_type'] == 'Income'])
-    st.metric("💰 Income Items", income_count)
-with col_c:
-    noi_count = len([i for i in edited_items if i['section_type'] == 'NOI'])
-    st.metric("📉 NOI Items", noi_count)
+if st.button("▶️ Run Categorisation", use_container_width=True, type="primary"):
+    st.session_state.sections_marked = True
+    st.session_state.section_selections = section_selections
+    st.rerun()
 
-st.markdown("---")
-st.subheader("📥 Export Categorized T12")
+# STEP 2: Categorisation (only show if sections are marked)
+if st.session_state.get('sections_marked', False):
+    st.markdown("---")
+    st.subheader("STEP 2: Categorisation")
+    st.markdown("**Select categories for each line item**")
 
-if st.button("✅ Export as CSV", use_container_width=True, type="primary"):
-    export_data = []
-    for item in st.session_state.get('t12_categorized', []):
-        export_data.append({
-            'Line Item': item['label'],
-            'Amount': item['amount'],
-            'Category': item['category'],
-            'Section': item['section_type'],
-            'Multiplier': item['multiplier']
+    # Table header for categorisation
+    header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([1.0, 2.2, 1.1, 1.0, 1.2, 1.3, 0.7])
+    with header_col1:
+        st.markdown("**Income/NOI**")
+    with header_col2:
+        st.markdown("**Line Item**")
+    with header_col3:
+        st.markdown("**Orig. Amt**")
+    with header_col4:
+        st.markdown("**Mult.**")
+    with header_col5:
+        st.markdown("**Adj. Amt**")
+    with header_col6:
+        st.markdown("**Category**")
+    with header_col7:
+        st.markdown("**Marker**")
+
+    st.markdown("---")
+
+    # Table rows - Step 2: Categorisation
+    edited_items = []
+    for idx, selection in enumerate(st.session_state.section_selections):
+        row = selection['data']
+        selected_section = selection['section']
+        original_amount = row['amount']
+
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.2, 1.1, 1.0, 1.2, 1.3, 0.7])
+
+        with col1:
+            st.write(f"**{selected_section}**")
+
+        with col2:
+            st.write(f"`{row['line_item'][:35]}`")
+
+        with col3:
+            st.write(f"**{original_amount:,.0f}**")
+
+        with col4:
+            multiplier_value = st.selectbox(
+                "Multiplier",
+                options=[1, -1],
+                format_func=lambda x: f"+{x}" if x > 0 else f"{x}",
+                index=0,
+                key=f"mult_{idx}_{hash(row['line_item']) % 10000}",
+                label_visibility="collapsed"
+            )
+
+        with col5:
+            adjusted_amount = original_amount * multiplier_value
+            st.write(f"**{adjusted_amount:,.0f}**")
+
+        with col6:
+            selected_cat = st.selectbox(
+                "Category",
+                options=list(engine.CATEGORY_RULES.keys()),
+                index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
+                key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
+                label_visibility="collapsed"
+            )
+
+        with col7:
+            marker_text = "🔄" if multiplier_value == -1 else ""
+            st.write(marker_text)
+
+        edited_items.append({
+            'label': row['line_item'],
+            'original_amount': original_amount,
+            'multiplier': multiplier_value,
+            'adjusted_amount': adjusted_amount,
+            'category': selected_cat,
+            'section_type': selected_section,
+            'values': row
         })
 
-    df_export = pd.DataFrame(export_data)
-    csv = df_export.to_csv(index=False)
+    st.session_state.t12_categorized = edited_items
 
-    st.download_button(
-        label="📥 Download CSV",
-        data=csv,
-        file_name=f"T12_Categorized_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv"
-    )
-    st.success("✅ Ready!")
+if st.session_state.get('sections_marked', False):
+    st.markdown("---")
+    st.header("✅ Financial Summary")
+
+    categorized_items = st.session_state.get('t12_categorized', [])
+
+    # Calculate totals as per categorisation
+    total_income_categorized = sum([i['adjusted_amount'] for i in categorized_items if i['category'] == 'Gross Potential Rents'])
+
+    # Deductions (all the "Less:" categories)
+    deductions = sum([i['adjusted_amount'] for i in categorized_items if i['category'] in ['Less: Vacancy Loss', 'Less: Loss to Lease', 'Less: Non-Revenue Units', 'Less: Concessions', 'Less: Bad Debt']])
+
+    net_income = total_income_categorized - deductions
+
+    # Other Income
+    other_income = sum([i['adjusted_amount'] for i in categorized_items if i['category'] == 'Other Income'])
+
+    # Total Expenses
+    total_expenses = sum([i['adjusted_amount'] for i in categorized_items if i['category'] == 'Expense'])
+
+    # NOI = (Gross Potential Rents - Deductions + Other Income) - Expenses
+    noi_categorized = net_income + other_income - total_expenses
+
+    # Display As Per Categorisation
+    st.subheader("As Per Categorisation")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("💰 Total Income", f"${total_income_categorized:,.0f}")
+    with col2:
+        st.metric("📉 Total Expenses", f"${total_expenses:,.0f}")
+    with col3:
+        st.metric("📊 NOI", f"${noi_categorized:,.0f}")
+
+    # Display breakdown
+    st.markdown("---")
+    st.write("**Income Breakdown:**")
+    breakdown_cols = st.columns([2, 1])
+    with breakdown_cols[0]:
+        st.write(f"Gross Potential Rents: ${total_income_categorized:,.0f}")
+        st.write(f"Less: Deductions: -${deductions:,.0f}")
+        st.write(f"Net Income: ${net_income:,.0f}")
+        st.write(f"Plus: Other Income: ${other_income:,.0f}")
+        st.divider()
+        st.write(f"**Total Rental Income: ${net_income + other_income:,.0f}**")
+
+    st.write("**Expense Breakdown:**")
+    with breakdown_cols[0]:
+        st.write(f"Total Operating Expenses: ${total_expenses:,.0f}")
+
+    st.divider()
+    st.write(f"**Net Operating Income (NOI): ${noi_categorized:,.0f}**")
+
+    st.markdown("---")
+    st.subheader("📥 Export Categorized T12")
+
+    if st.button("✅ Export as CSV", use_container_width=True, type="primary"):
+        export_data = []
+        for item in st.session_state.get('t12_categorized', []):
+            export_data.append({
+                'Line Item': item['label'],
+                'Original Amount': item['original_amount'],
+                'Multiplier': f"+{item['multiplier']}" if item['multiplier'] > 0 else f"{item['multiplier']}",
+                'Adjusted Amount': item['adjusted_amount'],
+                'Category': item['category'],
+                'Section': item['section_type']
+            })
+
+        df_export = pd.DataFrame(export_data)
+        csv = df_export.to_csv(index=False)
+
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name=f"T12_Categorized_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+        st.success("✅ Ready!")
 
 st.markdown("---")
 st.markdown("<p style='text-align:center'><small>Creative RE T12 Categorizer | Minimal Version</small></p>", unsafe_allow_html=True)
