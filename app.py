@@ -253,7 +253,7 @@ for item in categorized:
 # STEP 1: Mark Income/NOI sections
 st.markdown("---")
 st.subheader("STEP 1: Mark Income/NOI Sections")
-st.markdown("**Select "-", "Total Income", or "NOI" for each line item**")
+st.markdown('**Select "-", "Total Income", or "NOI" for each line item**')
 
 # Table header for section marking
 header_col1, header_col2, header_col3, header_col4 = st.columns([1.2, 3.0, 1.5, 1.0])
