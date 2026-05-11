@@ -42,14 +42,31 @@ st.markdown("**T12 + RR Processing → Trend Health Score**")
 # ============================================================================
 
 @st.cache_resource
-def load_ths_template():
-    """Load pre-loaded THS template from templates folder."""
-    template_path = Path(__file__).parent / "templates" / "THS_Template_Default.xlsx"
-    if not template_path.exists():
-        st.error(f"Template not found at: {template_path}")
-        return None
-    return openpyxl.load_workbook(template_path)
+   def load_ths_template():
+       """Load pre-loaded THS template from templates folder."""
+       import os
 
+       # Try multiple path variations
+       paths_to_try = [
+           "templates/THS_Template_Default.xlsx",
+           "./templates/THS_Template_Default.xlsx",
+           os.path.join(os.getcwd(), "templates", "THS_Template_Default.xlsx"),
+           os.path.join(os.path.dirname(__file__), "templates", "THS_Template_Default.xlsx"),
+       ]
+
+       for template_path in paths_to_try:
+           if os.path.exists(template_path):
+               try:
+                   return openpyxl.load_workbook(template_path)
+               except Exception as e:
+                   st.error(f"Error loading template from {template_path}: {str(e)}")
+                   return None
+
+       # If no path worked, show error with debugging info
+       st.error(f"Template not found. Tried: {paths_to_try}")
+       st.error(f"Current working directory: {os.getcwd()}")
+       return None
+       
 ths_template = load_ths_template()
 if ths_template is None:
     st.error("❌ THS Template not found. Please add to templates/ folder.")
