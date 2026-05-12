@@ -123,6 +123,11 @@ class CategorizationEngine:
             'patterns': [r'\bOther\s+(?:Property\s+)?Income', r'Pet\s+(?:Fee|Rent)', r'Parking', r'Laundry', r'Late\s+(?:Fee|Charge)', r'Application\s+Fee', r'Amenity\s+Fee', r'Reimbursement', r'RUBS', r'Damage\s+(?:Fee|Income)', r'Interest\s+Income', r'(?:Key|Access)\s+(?:Fee|Card)', r'Lease\s+Violation', r'Legal\s+(?:Fee|Collection)', r'NSF', r'Storage', r'Miscellaneous\s+Income', r'Administrative\s+Fee'],
             'type': 'income',
             'priority': 70
+        },
+        'Expense': {
+            'patterns': [r'Expense$', r'Management\s+Fee', r'Payroll', r'Salaries?', r'Wages', r'Taxes', r'Insurance', r'Worker.*Compensation'],
+            'type': 'expense',
+            'priority': 80
         }
     }
 
@@ -408,24 +413,19 @@ for idx, row in enumerate(table_data):
         # Determine default category based on position
         if is_between_sections:
             # Between Total Income and NOI: default to Expense
-            current_index = 0
-            default_cat = "Expense"
+            current_index = category_options.index('Expense') if 'Expense' in category_options else 0
         else:
             # Before Total Income or between NOI and end: use engine categorization
             should_be_empty = (original_amount == 0 and 'total' in row['line_item'].lower())
 
             if should_be_empty:
                 current_index = 0  # Default to "-"
-                default_cat = "-"
             elif row['category'] == '-':
                 current_index = 0
-                default_cat = "-"
             elif row['category'] in category_options:
                 current_index = category_options.index(row['category'])
-                default_cat = row['category']
             else:
                 current_index = 0
-                default_cat = "-"
 
         selected_cat = st.selectbox(
             "Category",
