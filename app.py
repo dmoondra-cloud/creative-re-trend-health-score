@@ -247,18 +247,22 @@ st.set_page_config(
 )
 
 st.title("📊 T12 Categorization Tool")
-st.markdown("**Upload raw T12 → Auto-categorize → Review & Export**")
+st.markdown("**Upload raw T12 → Select Boundaries → AI Categorize → Review & Export**")
 
 # ────────────────────────────────────────────────────────────────────────────
-# UPLOAD T12
+# COMPACT UPLOAD + SELECT BOUNDARIES LAYOUT
 # ────────────────────────────────────────────────────────────────────────────
 
-st.header("📁 Upload T12 Statement")
+left_col, right_col = st.columns([1, 1])
 
-t12_file = st.file_uploader(
-    "Upload raw T12 (Yardi/MRI format)",
-    type=["xlsx", "xls"]
-)
+# LEFT SIDE: Upload T12 (Compact)
+with left_col:
+    st.subheader("📁 Upload T12")
+    t12_file = st.file_uploader(
+        "Upload raw T12 (Yardi/MRI format)",
+        type=["xlsx", "xls"],
+        label_visibility="collapsed"
+    )
 
 if not t12_file:
     st.warning("⚠️ Please upload a T12 file to continue")
@@ -308,54 +312,56 @@ for item in categorized:
     })
     item_idx += 1
 
-# ────────────────────────────────────────────────────────────────────────────
-# STEP 0: Select Total Income & NOI Line Items
-# ────────────────────────────────────────────────────────────────────────────
+# RIGHT SIDE: Select Boundaries + Run AI Categorisation
+with right_col:
+    st.subheader("⚙️ Set Boundaries")
+
+    # Get list of all line items for dropdown
+    all_line_items = [row['line_item'] for row in table_data]
+
+    # Two columns for dropdowns (25% each)
+    col_ti, col_noi = st.columns(2)
+
+    with col_ti:
+        selected_total_income = st.selectbox(
+            "Total Income",
+            options=['--'] + all_line_items,
+            index=0,
+            key="total_income_select",
+            label_visibility="collapsed"
+        )
+
+    with col_noi:
+        selected_noi = st.selectbox(
+            "NOI",
+            options=['--'] + all_line_items,
+            index=0,
+            key="noi_select",
+            label_visibility="collapsed"
+        )
+
+    # Store selections in session state
+    st.session_state.selected_total_income = selected_total_income
+    st.session_state.selected_noi = selected_noi
+
+    # Large AI Categorisation button
+    st.markdown("")  # Small spacing
+    if st.button("🤖 Run AI Categorisation", use_container_width=True, type="primary", help="Use AI to intelligently categorize all line items"):
+        st.session_state.step1_complete = True
+        st.rerun()
+
 st.markdown("---")
-st.subheader("STEP 1: Mark Total Income & NOI Line Items")
-st.markdown('**Select which line items represent "Total Income" and "NOI" to stop categorization after NOI**')
 
-# Get list of all line items for dropdown
-all_line_items = [row['line_item'] for row in table_data]
-
-col_ti, col_noi = st.columns(2)
-
-with col_ti:
-    selected_total_income = st.selectbox(
-        "Select Total Income Line Item:",
-        options=['--'] + all_line_items,
-        index=0,
-        key="total_income_select"
-    )
-
-with col_noi:
-    selected_noi = st.selectbox(
-        "Select NOI Line Item:",
-        options=['--'] + all_line_items,
-        index=0,
-        key="noi_select"
-    )
-
-# Store selections in session state
-st.session_state.selected_total_income = selected_total_income
-st.session_state.selected_noi = selected_noi
-
-st.markdown("---")
-
-if st.button("▶️ Proceed to Categorization", use_container_width=True, type="primary"):
-    st.session_state.step1_complete = True
-    st.rerun()
-
-# Only show STEP 2 if STEP 1 is complete
+# Only show STEP 1 if user clicked Run AI Categorisation
 if not st.session_state.get('step1_complete', False):
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────────────
-# STEP 2: Categorisation
+# STEP 1: Review & Adjust AI Categorisation
 # ────────────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.subheader("STEP 2: Categorisation & Adjustments")
-st.markdown("**Configure categories, multipliers, and amounts for each line item**")
+st.subheader("STEP 1: Review & Adjust AI Categorisation")
+st.markdown("**Review AI-generated categories and make adjustments as needed**")
 
 # Table header for categorisation
 header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0])
