@@ -125,7 +125,7 @@ class CategorizationEngine:
             'priority': 70
         },
         'Expense': {
-            'patterns': [r'Expense$', r'Management\s+Fee', r'Payroll', r'Salaries?', r'Wages', r'Taxes', r'Insurance', r'Worker.*Compensation'],
+            'patterns': [r'Expense$', r'Management\s+Fee', r'Payroll', r'Salaries?', r'Wages', r'Taxes', r'Insurance', r'Worker.*Compensation', r'Bank\s+Charge', r'Technology', r'Repairs', r'Maintenance', r'Contract\s+-', r'Utilities', r'Trash', r'Water', r'Electric'],
             'type': 'expense',
             'priority': 80
         }
@@ -338,6 +338,15 @@ with header_col5:
 
 st.markdown("---")
 
+# Calculate indices once (outside loop)
+total_income_idx = None
+noi_idx = None
+for i, item in enumerate(table_data):
+    if item['line_item'] == st.session_state.selected_total_income:
+        total_income_idx = i
+    if item['line_item'] == st.session_state.selected_noi:
+        noi_idx = i
+
 # Table rows - Categorisation
 edited_items = []
 categorization_stopped = False
@@ -382,19 +391,8 @@ for idx, row in enumerate(table_data):
     original_amount = row['amount']
 
     # Determine if this item is before, between, or after Total Income/NOI
-    is_between_sections = False
-    total_income_idx = None
-    noi_idx = None
-
-    # Find indices of Total Income and NOI
-    for i, item in enumerate(table_data):
-        if item['line_item'] == st.session_state.selected_total_income:
-            total_income_idx = i
-        if item['line_item'] == st.session_state.selected_noi:
-            noi_idx = i
-
-    if total_income_idx is not None and noi_idx is not None:
-        is_between_sections = total_income_idx < idx < noi_idx
+    is_between_sections = (total_income_idx is not None and noi_idx is not None and
+                           total_income_idx < idx < noi_idx)
 
     with col1:
         marker = ""
