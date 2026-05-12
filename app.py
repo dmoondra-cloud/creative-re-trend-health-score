@@ -355,6 +355,15 @@ st.markdown("---")
 if not st.session_state.get('step1_complete', False):
     st.stop()
 
+# Calculate indices for Total Income and NOI
+total_income_idx = None
+noi_idx = None
+for i, item in enumerate(table_data):
+    if item['line_item'] == st.session_state.selected_total_income:
+        total_income_idx = i
+    if item['line_item'] == st.session_state.selected_noi:
+        noi_idx = i
+
 # ────────────────────────────────────────────────────────────────────────────
 # SUMMARY TABLE: Compare T12 vs Categorisation
 # ────────────────────────────────────────────────────────────────────────────
