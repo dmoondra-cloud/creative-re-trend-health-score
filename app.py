@@ -6,6 +6,7 @@ Standalone app with all logic embedded (no external modules needed)
 import streamlit as st
 import pandas as pd
 import openpyxl
+from openpyxl.utils import get_column_letter
 import tempfile
 import re
 from datetime import datetime
@@ -266,13 +267,26 @@ def generate_t12_download(edited_items, property_name, parsed_t12):
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
         ws = wb["T12"]
 
-        # Fill T12 sheet starting from row 10
+        # ────────────────────────────────────────────────────────────────
+        # POPULATE C6 WITH T12 PERIOD
+        # ────────────────────────────────────────────────────────────────
+        if parsed_t12.get('period'):
+            ws['C6'].value = parsed_t12['period']
+
+        # ────────────────────────────────────────────────────────────────
+        # FILL T12 SHEET WITH CATEGORIZED DATA
+        # ────────────────────────────────────────────────────────────────
         current_row = 10
+        noi_row = None
 
         for item in edited_items:
             # Skip post-NOI items
             if item.get('is_post_noi', False):
                 continue
+
+            # Check if this is the NOI line item
+            if 'NOI' in str(item['label']).upper() or item['label'] == st.session_state.selected_noi:
+                noi_row = current_row
 
             # Column C = Category
             ws.cell(current_row, 3).value = item['category']
@@ -289,6 +303,24 @@ def generate_t12_download(edited_items, property_name, parsed_t12):
                 ws.cell(current_row, col_num).value = adjusted_amount
 
             current_row += 1
+
+        # ────────────────────────────────────────────────────────────────
+        # CREATE NOI FORMULAS IN Z26, AA26, AB26, AC26, AD26
+        # ────────────────────────────────────────────────────────────────
+        if noi_row:
+            # Z26 = R[noi_row], AA26 = S[noi_row], AB26 = T[noi_row], AC26 = U[noi_row], AD26 = V[noi_row]
+            # Column R = 18, S = 19, T = 20, U = 21, V = 22
+            # Target columns: Z=26, AA=27, AB=28, AC=29, AD=30
+
+            target_cols = [26, 27, 28, 29, 30]  # Z, AA, AB, AC, AD
+            source_cols = [18, 19, 20, 21, 22]  # R, S, T, U, V
+
+            for target_col, source_col in zip(target_cols, source_cols):
+                source_letter = get_column_letter(source_col)
+                target_letter = get_column_letter(target_col)
+                # Create formula: =R[noi_row]
+                formula = f"={source_letter}{noi_row}"
+                ws[f'{target_letter}26'].value = formula
 
         # Save to BytesIO
         output = BytesIO()
