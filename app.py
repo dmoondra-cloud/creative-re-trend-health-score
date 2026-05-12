@@ -348,8 +348,6 @@ with right_col:
         st.session_state.step1_complete = True
         st.rerun()
 
-st.markdown("---")
-
 # Only show content if user clicked Run AI Categorisation
 if not st.session_state.get('step1_complete', False):
     st.stop()
@@ -442,8 +440,6 @@ with left_col:
     with col4:
         st.write("—")
 
-st.markdown("---")
-
 # Download button - 50% width on left
 col_download, col_space = st.columns([1, 1])
 with col_download:
@@ -456,21 +452,6 @@ with col_download:
 st.markdown("---")
 st.subheader("STEP 1: Review & Adjust AI Categorisation")
 st.markdown("**Review AI-generated categories and make adjustments as needed**")
-
-# Table header for categorisation
-header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0])
-with header_col1:
-    st.markdown("**Line Item**")
-with header_col2:
-    st.markdown("**Orig. Amt**")
-with header_col3:
-    st.markdown("**Category**")
-with header_col4:
-    st.markdown("**Mult.**")
-with header_col5:
-    st.markdown("**Result**")
-
-st.markdown("---")
 
 # Calculate indices once (outside loop)
 total_income_idx = None
