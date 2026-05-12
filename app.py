@@ -246,7 +246,7 @@ for item in categorized:
 # STEP 0: Select Total Income & NOI Line Items
 # ────────────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.subheader("STEP 0: Mark Total Income & NOI Line Items")
+st.subheader("STEP 1: Mark Total Income & NOI Line Items")
 st.markdown('**Select which line items represent "Total Income" and "NOI" to stop categorization after NOI**')
 
 # Get list of all line items for dropdown
@@ -274,11 +274,21 @@ with col_noi:
 st.session_state.selected_total_income = selected_total_income
 st.session_state.selected_noi = selected_noi
 
+st.markdown("---")
+
+if st.button("▶️ Proceed to Categorization", use_container_width=True, type="primary"):
+    st.session_state.step1_complete = True
+    st.rerun()
+
+# Only show STEP 2 if STEP 1 is complete
+if not st.session_state.get('step1_complete', False):
+    st.stop()
+
 # ────────────────────────────────────────────────────────────────────────────
-# STEP 1: Categorisation
+# STEP 2: Categorisation
 # ────────────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.subheader("STEP 1: Categorisation & Adjustments")
+st.subheader("STEP 2: Categorisation & Adjustments")
 st.markdown("**Configure categories, multipliers, and amounts for each line item**")
 
 # Table header for categorisation
@@ -351,10 +361,22 @@ for idx, row in enumerate(table_data):
         st.write(f"**{original_amount:,.0f}**")
 
     with col3:
+        category_options = ['-'] + list(engine.CATEGORY_RULES.keys())
+
+        # Auto-set to "-" for items with zero amount or containing "total"
+        should_be_empty = (original_amount == 0) or ('total' in row['line_item'].lower())
+
+        if should_be_empty:
+            current_index = 0  # Default to "-"
+        elif row['category'] in engine.CATEGORY_RULES:
+            current_index = category_options.index(row['category'])
+        else:
+            current_index = 0
+
         selected_cat = st.selectbox(
             "Category",
-            options=list(engine.CATEGORY_RULES.keys()),
-            index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
+            options=category_options,
+            index=current_index,
             key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
             label_visibility="collapsed"
         )
