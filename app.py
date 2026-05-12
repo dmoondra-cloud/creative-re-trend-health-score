@@ -140,8 +140,12 @@ class CategorizationEngine:
             return self.cache[label]
 
         # Check if this is a header/total line that should be "-"
-        has_empty_amount = (value == 0 and 'total' in label.lower())
-        if has_empty_amount:
+        # Headers have 0 amount and contain "total", or are all caps, or contain section keywords
+        is_header = (value == 0 and ('total' in label.lower() or
+                    label.isupper() or
+                    any(x in label.lower() for x in ['expense', 'income', 'administrative', 'payroll', 'maintenance'])))
+
+        if is_header:
             result = {
                 'label': label,
                 'category': '-',
@@ -162,6 +166,10 @@ class CategorizationEngine:
             for pattern in rules['patterns']:
                 match = re.search(pattern, label, re.IGNORECASE)
                 if match:
+                    # SPECIAL CASE: If it's a "Reimbursement" item, skip Expense matches
+                    if 'reimbursement' in label.lower() and category == 'Expense':
+                        continue
+
                     # Score based on match position and priority
                     position_score = 100 - (match.start() / max(len(label), 1) * 30)
                     total_score = position_score + priority
