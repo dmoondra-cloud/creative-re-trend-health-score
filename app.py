@@ -367,7 +367,8 @@ for i, item in enumerate(table_data):
 # SUMMARY TABLE: Compare T12 vs Categorisation
 # ────────────────────────────────────────────────────────────────────────────
 # Header
-st.subheader("📋 Financial Summary: T12 vs Categorisation")
+st.subheader("📋 Financial Summary")
+st.caption(f"📍 {parsed_t12['property_name']}")
 
 # Find Total Expense line (usually just before NOI)
 total_expense_line = None
@@ -440,11 +441,6 @@ with left_col:
         st.write("*[Calculating...]*")
     with col4:
         st.write("—")
-
-    # Property name (below, not bold, same format as Total Income)
-    col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
-    with col1:
-        st.write(f"Property: {parsed_t12['property_name']}")
 
 st.markdown("---")
 
