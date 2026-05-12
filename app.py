@@ -28,7 +28,7 @@ class T12Parser:
         period = None
 
         # Try to detect property name and period from first few rows
-        for r in range(1, min(20, self.ws.max_row + 1)):
+        for r in range(1, min(10, self.ws.max_row + 1)):
             cell_val = self.ws.cell(r, 1).value
             if cell_val and isinstance(cell_val, str):
                 if not property_name:
@@ -36,8 +36,9 @@ class T12Parser:
                 if 'month' in str(cell_val).lower() or 'period' in str(cell_val).lower():
                     period = str(cell_val).strip()
 
-        # Find data rows (scan for numeric data)
-        for r in range(1, self.ws.max_row + 1):
+        # Parse T12 data starting from line 10
+        # Include ALL line items without filtering or header detection
+        for r in range(10, self.ws.max_row + 1):
             col_a = self.ws.cell(r, 1).value
             if col_a is None:
                 col_a = self.ws.cell(r, 2).value
@@ -49,41 +50,29 @@ class T12Parser:
             if not label or len(label) < 1:
                 continue
 
-            # Skip only pure summary rows (not section headers)
-            if 'property occupancy' in label.lower():
-                continue
-
-            # Detect section headers (low indent, typically uppercase or key section terms)
-            is_section = any(x in label.upper() for x in ['GROSS', 'LESS:', 'EXPENSE', 'INCOME', 'OPERATION', 'UTILITIES', 'PAYROLL'])
-            is_subtotal = 'TOTAL' in label.upper()
-
             # Collect monthly values - scan all columns with numeric data
             values = []
-            has_any_value = False
             for c in range(2, min(20, self.ws.max_column + 1)):
                 try:
                     val = self.ws.cell(r, c).value
                     if val is not None and isinstance(val, (int, float)):
                         values.append(float(val))
-                        if val != 0:
-                            has_any_value = True
                     else:
                         values.append(0)
                 except:
                     values.append(0)
 
-            # Include rows with label + either has data or is a section header
-            if has_any_value or is_section or is_subtotal:
-                # Pad to 12 months if needed
-                while len(values) < 12:
-                    values.append(0)
+            # Include all rows with a label (no filtering)
+            # Pad to 12 months if needed
+            while len(values) < 12:
+                values.append(0)
 
-                line_items.append({
-                    'label': label,
-                    'values': values[:12],  # Take first 12 months
-                    'is_subtotal': is_subtotal,
-                    'is_section_header': is_section
-                })
+            line_items.append({
+                'label': label,
+                'values': values[:12],  # Take first 12 months
+                'is_subtotal': False,
+                'is_section_header': False  # No section header detection
+            })
 
         return {
             'parsed_successfully': len(line_items) > 0,
@@ -237,32 +226,19 @@ st.caption(f"**Property:** {parsed_t12['property_name']} | **Period:** {parsed_t
 engine = CategorizationEngine()
 categorized = engine.categorize_batch(parsed_t12['line_items'])
 
-# Prepare table data (include section headers)
+# Prepare table data - all line items without filtering
 table_data = []
 item_idx = 0
 
 for item in categorized:
-    if item['is_subtotal']:
-        continue
-
     total_val = sum(item['values']) if 'values' in item else 0
-
-    # Detect multiplier
-    multiplier_text = "×1"
-    if total_val != 0:
-        if ('utility' in item['label'].lower() or 'rubs' in item['label'].lower()) and total_val < 0:
-            multiplier_text = "×-1"
-
-    is_section = item['is_section_header']
 
     table_data.append({
         'idx': item_idx,
         'amount': total_val,
         'line_item': item['label'],
         'category': item['category'],
-        'income_expense_type': 'Income' if item['type'] == 'income' else 'Expense',
-        'multiplier': multiplier_text,
-        'is_section': is_section
+        'income_expense_type': 'Income' if item['type'] == 'income' else 'Expense'
     })
     item_idx += 1
 
@@ -306,21 +282,19 @@ st.subheader("STEP 1: Categorisation & Adjustments")
 st.markdown("**Configure categories, multipliers, and amounts for each line item**")
 
 # Table header for categorisation
-header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0, 1.0])
 with header_col1:
     st.markdown("**Line Item**")
 with header_col2:
-    st.markdown("**Name**")
-with header_col3:
     st.markdown("**Orig. Amt**")
+with header_col3:
+    st.markdown("**Category**")
 with header_col4:
     st.markdown("**Mult.**")
 with header_col5:
     st.markdown("**Result**")
 with header_col6:
-    st.markdown("**Category**")
-with header_col7:
-    st.markdown("**Marker**")
+    st.markdown("**Status**")
 
 st.markdown("---")
 
@@ -336,22 +310,20 @@ for idx, row in enumerate(table_data):
 
     # After NOI, only show the line item without categorization options
     if categorization_stopped and row['line_item'] != st.session_state.selected_noi:
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+        col1, col2, col3, col4, col5, col6 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0, 1.0])
 
         with col1:
-            st.write("🔒")  # Locked marker
+            st.write(f"`{row['line_item']}`")
         with col2:
-            st.markdown(f"**{row['line_item'][:30]}** (Post-NOI)")
-        with col3:
             st.write(f"**{row['amount']:,.0f}**")
+        with col3:
+            st.write("—")
         with col4:
             st.write("—")
         with col5:
             st.write("—")
         with col6:
-            st.write("—")
-        with col7:
-            st.write("")
+            st.write("🔒 Locked")
 
         edited_items.append({
             'label': row['line_item'],
@@ -366,94 +338,61 @@ for idx, row in enumerate(table_data):
         })
         continue
 
-    # Section headers styling
-    if row['is_section']:
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+    # Regular line item row
+    col1, col2, col3, col4, col5, col6 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0, 1.0])
 
-        with col1:
-            st.write("📌")  # Section marker
-        with col2:
-            st.markdown(f"**{row['line_item'].upper()}**")
-        with col3:
-            st.write("")
-        with col4:
-            st.write("")
-        with col5:
-            st.write("")
-        with col6:
-            st.write("")
-        with col7:
-            st.write("")
+    original_amount = row['amount']
 
-        edited_items.append({
-            'label': row['line_item'],
-            'original_amount': 0,
-            'multiplier': 1,
-            'adjusted_amount': 0,
-            'category': '-',
-            'section_type': '-',
-            'values': row,
-            'is_section_header': True,
-            'is_post_noi': False
-        })
-    else:
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+    with col1:
+        marker = ""
+        if row['line_item'] == st.session_state.selected_total_income:
+            marker = "💰 "
+        elif row['line_item'] == st.session_state.selected_noi:
+            marker = "📊 "
+        st.write(f"{marker}`{row['line_item']}`")
 
-        original_amount = row['amount']
+    with col2:
+        st.write(f"**{original_amount:,.0f}**")
 
-        with col1:
-            marker = ""
-            if row['line_item'] == st.session_state.selected_total_income:
-                marker = "💰 TI"
-            elif row['line_item'] == st.session_state.selected_noi:
-                marker = "📊 NOI"
-            st.write(marker)
+    with col3:
+        selected_cat = st.selectbox(
+            "Category",
+            options=list(engine.CATEGORY_RULES.keys()),
+            index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
+            key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
+            label_visibility="collapsed"
+        )
 
-        with col2:
-            st.write(f"`{row['line_item'][:25]}`")
+    with col4:
+        multiplier_value = st.selectbox(
+            "Multiplier",
+            options=[1, -1],
+            format_func=lambda x: f"+{x}" if x > 0 else f"{x}",
+            index=0,
+            key=f"mult_{idx}_{hash(row['line_item']) % 10000}",
+            label_visibility="collapsed"
+        )
 
-        with col3:
-            st.write(f"**{original_amount:,.0f}**")
+    with col5:
+        adjusted_amount = original_amount * multiplier_value
+        display_text = "same" if adjusted_amount == original_amount else f"{adjusted_amount:,.0f}"
+        st.write(f"**{display_text}**")
 
-        with col4:
-            multiplier_value = st.selectbox(
-                "Multiplier",
-                options=[1, -1],
-                format_func=lambda x: f"+{x}" if x > 0 else f"{x}",
-                index=0,
-                key=f"mult_{idx}_{hash(row['line_item']) % 10000}",
-                label_visibility="collapsed"
-            )
+    with col6:
+        status_text = "🔄 Flipped" if multiplier_value == -1 else "✓"
+        st.write(status_text)
 
-        with col5:
-            adjusted_amount = original_amount * multiplier_value
-            display_text = "same" if adjusted_amount == original_amount else f"{adjusted_amount:,.0f}"
-            st.write(f"**{display_text}**")
-
-        with col6:
-            selected_cat = st.selectbox(
-                "Category",
-                options=list(engine.CATEGORY_RULES.keys()),
-                index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
-                key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
-                label_visibility="collapsed"
-            )
-
-        with col7:
-            marker_text = "🔄" if multiplier_value == -1 else ""
-            st.write(marker_text)
-
-        edited_items.append({
-            'label': row['line_item'],
-            'original_amount': original_amount,
-            'multiplier': multiplier_value,
-            'adjusted_amount': adjusted_amount,
-            'category': selected_cat,
-            'section_type': '-',
-            'values': row,
-            'is_section_header': False,
-            'is_post_noi': False
-        })
+    edited_items.append({
+        'label': row['line_item'],
+        'original_amount': original_amount,
+        'multiplier': multiplier_value,
+        'adjusted_amount': adjusted_amount,
+        'category': selected_cat,
+        'section_type': '-',
+        'values': row,
+        'is_section_header': False,
+        'is_post_noi': False
+    })
 
 st.session_state.t12_categorized = edited_items
 
