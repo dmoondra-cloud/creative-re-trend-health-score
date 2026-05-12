@@ -366,12 +366,8 @@ for i, item in enumerate(table_data):
 # ────────────────────────────────────────────────────────────────────────────
 # SUMMARY TABLE: Compare T12 vs Categorisation
 # ────────────────────────────────────────────────────────────────────────────
-# Header with property name right-aligned (no box)
-header_col1, header_col2 = st.columns([2.5, 1.5])
-with header_col1:
-    st.subheader("📋 Financial Summary: T12 vs Categorisation")
-with header_col2:
-    st.markdown(f"<p style='text-align: right; margin-top: 10px;'><small>📍 {parsed_t12['property_name']}</small></p>", unsafe_allow_html=True)
+# Header
+st.subheader("📋 Financial Summary: T12 vs Categorisation")
 
 # Find Total Expense line (usually just before NOI)
 total_expense_line = None
@@ -399,36 +395,56 @@ if st.session_state.selected_noi != '--':
             noi_t12 = item['amount']
             break
 
-# Display data rows (no header row)
-col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
-with col1:
-    st.write("**Total Income**")
-with col2:
-    st.write(f"${total_income_t12:,.0f}")
-with col3:
-    st.write("*[Calculating...]*")
-with col4:
-    st.write("—")
+# Left column for table (50% width)
+left_col, right_col = st.columns([1, 1])
 
-col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
-with col1:
-    st.write("**Total Expense**")
-with col2:
-    st.write(f"${total_expense_amount:,.0f}" if total_expense_line else "—")
-with col3:
-    st.write("*[Calculating...]*")
-with col4:
-    st.write("—")
+with left_col:
+    # Column headings (no divider line)
+    col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
+    with col1:
+        st.markdown("")  # Empty for alignment
+    with col2:
+        st.write("**As per T12**")
+    with col3:
+        st.write("**As per Categorisation**")
+    with col4:
+        st.write("**Error Check**")
 
-col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
-with col1:
-    st.write("**NOI**")
-with col2:
-    st.write(f"${noi_t12:,.0f}")
-with col3:
-    st.write("*[Calculating...]*")
-with col4:
-    st.write("—")
+    # Data rows
+    col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
+    with col1:
+        st.write("Total Income")
+    with col2:
+        st.write(f"${total_income_t12:,.0f}")
+    with col3:
+        st.write("*[Calculating...]*")
+    with col4:
+        st.write("—")
+
+    col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
+    with col1:
+        st.write("Total Expense")
+    with col2:
+        st.write(f"${total_expense_amount:,.0f}" if total_expense_line else "—")
+    with col3:
+        st.write("*[Calculating...]*")
+    with col4:
+        st.write("—")
+
+    col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
+    with col1:
+        st.write("NOI")
+    with col2:
+        st.write(f"${noi_t12:,.0f}")
+    with col3:
+        st.write("*[Calculating...]*")
+    with col4:
+        st.write("—")
+
+    # Property name (below, not bold, same format as Total Income)
+    col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
+    with col1:
+        st.write(f"Property: {parsed_t12['property_name']}")
 
 st.markdown("---")
 
@@ -588,32 +604,3 @@ for idx, row in enumerate(table_data):
 
 st.session_state.t12_categorized = edited_items
 
-st.markdown("---")
-st.subheader("📥 Export Categorized T12")
-
-if st.button("✅ Export as CSV", use_container_width=True, type="primary"):
-    export_data = []
-    for item in st.session_state.get('t12_categorized', []):
-        post_noi_marker = " (Post-NOI - Not Categorized)" if item.get('is_post_noi', False) else ""
-        export_data.append({
-            'Line Item': item['label'] + post_noi_marker,
-            'Original Amount': item['original_amount'],
-            'Multiplier': f"+{item['multiplier']}" if item['multiplier'] > 0 else f"{item['multiplier']}",
-            'Adjusted Amount': item['adjusted_amount'],
-            'Category': item['category'],
-            'Section': item['section_type']
-        })
-
-    df_export = pd.DataFrame(export_data)
-    csv = df_export.to_csv(index=False)
-
-    st.download_button(
-        label="📥 Download CSV",
-        data=csv,
-        file_name=f"T12_Categorized_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv"
-    )
-    st.success("✅ Ready!")
-
-st.markdown("---")
-st.markdown("<p style='text-align:center'><small>Creative RE T12 Categorizer | Minimal Version</small></p>", unsafe_allow_html=True)
