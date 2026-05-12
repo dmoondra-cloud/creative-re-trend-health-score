@@ -86,66 +86,30 @@ class T12Parser:
 # ============================================================================
 
 class CategorizationEngine:
-    """Categorizes T12 line items into 8 THS categories."""
-
-    CATEGORY_RULES = {
-        'Gross Potential Rents': {
-            'patterns': [r'\bGross\s+(?:Market|Potential)?\s+Rent', r'\bGPR\b', r'Gross\s+Rental\s+Income', r'Market\s+Rent'],
-            'type': 'income',
-            'priority': 100
-        },
-        'Less: Vacancy Loss': {
-            'patterns': [r'\bVacancy\b', r'Vacant\s+Unit', r'Unoccupied', r'Vacancy\s+Loss'],
-            'type': 'income',
-            'priority': 90
-        },
-        'Less: Loss to Lease': {
-            'patterns': [r'\bLoss\b.*\bLease\b', r'Contract\s+Gain.*Loss', r'\bLTL\b'],
-            'type': 'income',
-            'priority': 90
-        },
-        'Less: Bad Debt': {
-            'patterns': [r'\bBad\s+Debt\b(?!\s+Recovery)', r'Allowance.*Doubtful', r'Uncollectible'],
-            'type': 'income',
-            'priority': 85
-        },
-        'Less: Concessions': {
-            'patterns': [r'Concession', r'Conc\s*-', r'Move[\s\-]?in\s+Special', r'Rent\s+Reduction', r'Rent\s+Concession'],
-            'type': 'income',
-            'priority': 85
-        },
-        'Less: Non-Revenue Units': {
-            'patterns': [r'Model\s+Unit', r'Admin\s+Unit', r'Office\s+Unit', r'Down\s+Unit', r'Employee\s+Unit', r'Non[\s\-]?Revenue', r'Courtesy.*Discount'],
-            'type': 'income',
-            'priority': 85
-        },
-        'Other Income': {
-            'patterns': [r'\bOther\s+(?:Property\s+)?Income', r'Pet\s+(?:Fee|Rent)', r'Parking', r'Laundry', r'Late\s+(?:Fee|Charge)', r'Application\s+Fee', r'Amenity\s+Fee', r'Reimbursement', r'RUBS', r'Damage\s+(?:Fee|Income)', r'Interest\s+Income', r'(?:Key|Access)\s+(?:Fee|Card)', r'Lease\s+Violation', r'Legal\s+(?:Fee|Collection)', r'NSF', r'Storage', r'Miscellaneous\s+Income', r'Administrative\s+Fee'],
-            'type': 'income',
-            'priority': 70
-        },
-        'Expense': {
-            'patterns': [r'Expense$', r'Management\s+Fee', r'Payroll', r'Salaries?', r'Wages', r'Taxes', r'Insurance', r'Worker.*Compensation', r'Bank\s+Charge', r'Technology', r'Repairs', r'Maintenance', r'Contract\s+-', r'Utilities', r'Trash', r'Water', r'Electric'],
-            'type': 'expense',
-            'priority': 80
-        }
-    }
+    """Semantic categorization - analyzes line item meaning, not hardcoded keywords."""
 
     def __init__(self):
         self.cache = {}
 
-    def categorize_line_item(self, label, value=0):
-        """Categorize a single line item based on semantic matching."""
+    def is_header_or_total(self, label, amount):
+        """Check if this is a header/total line that shouldn't be categorized."""
+        # Rule 1: No amount (0 or empty) + contains total-like word
+        if amount == 0:
+            total_keywords = ['total', 'subtotal', 'sub-total', 'aggregate', 'summary']
+            if any(keyword in label.lower() for keyword in total_keywords):
+                return True
+        return False
+
+    def categorize_line_item(self, label, amount=0, section='income'):
+        """
+        Semantic categorization based on line item MEANING, not keywords.
+        section: 'income' (before Total Income), 'expense' (between Total Income and NOI), 'post_noi' (after NOI)
+        """
         if label in self.cache:
             return self.cache[label]
 
-        # Check if this is a header/total line that should be "-"
-        # Headers have 0 amount and contain "total", or are all caps, or contain section keywords
-        is_header = (value == 0 and ('total' in label.lower() or
-                    label.isupper() or
-                    any(x in label.lower() for x in ['expense', 'income', 'administrative', 'payroll', 'maintenance'])))
-
-        if is_header:
+        # Universal Rule: No amount + total-like word = "-"
+        if self.is_header_or_total(label, amount):
             result = {
                 'label': label,
                 'category': '-',
@@ -155,40 +119,15 @@ class CategorizationEngine:
             self.cache[label] = result
             return result
 
-        # Try to match against category rules
-        best_match = None
-        best_score = 0
-        best_priority = -1
+        # INCOME SECTION (before Total Income)
+        if section == 'income':
+            return self._categorize_income(label, amount)
 
-        for category, rules in self.CATEGORY_RULES.items():
-            priority = rules.get('priority', 50)
+        # EXPENSE SECTION (between Total Income and NOI)
+        elif section == 'expense':
+            return self._categorize_expense(label, amount)
 
-            for pattern in rules['patterns']:
-                match = re.search(pattern, label, re.IGNORECASE)
-                if match:
-                    # SPECIAL CASE: If it's a "Reimbursement" item, skip Expense matches
-                    if 'reimbursement' in label.lower() and category == 'Expense':
-                        continue
-
-                    # Score based on match position and priority
-                    position_score = 100 - (match.start() / max(len(label), 1) * 30)
-                    total_score = position_score + priority
-
-                    if total_score > best_score or (total_score == best_score and priority > best_priority):
-                        best_score = total_score
-                        best_priority = priority
-                        best_match = {
-                            'category': category,
-                            'type': rules['type'],
-                            'confidence': min(1.0, best_score / 150)
-                        }
-
-        # Default to "-" if no match found (let the UI decide)
-        if best_match:
-            result = {
-                'label': label,
-                **best_match
-            }
+        # POST-NOI SECTION
         else:
             result = {
                 'label': label,
@@ -196,7 +135,92 @@ class CategorizationEngine:
                 'type': 'income',
                 'confidence': 0.0
             }
+            self.cache[label] = result
+            return result
 
+    def _categorize_income(self, label, amount):
+        """Categorize income items into: Rental Income, Rental Losses, Other Income"""
+        label_lower = label.lower()
+
+        # Check for RENTAL LOSSES (most specific)
+        rental_loss_keywords = {
+            'vacancy': 'Less: Vacancy Loss',
+            'loss.*lease|lease.*loss': 'Less: Loss to Lease',
+            'bad debt': 'Less: Bad Debt',
+            'concession|conc': 'Less: Concessions',
+            'model|admin|down unit|employee unit|non-revenue|courtesy': 'Less: Non-Revenue Units'
+        }
+
+        for keyword, category in rental_loss_keywords.items():
+            if re.search(keyword, label_lower, re.IGNORECASE):
+                result = {
+                    'label': label,
+                    'category': category,
+                    'type': 'income',
+                    'confidence': 0.85
+                }
+                self.cache[label] = result
+                return result
+
+        # Check for RENTAL INCOME
+        rental_keywords = ['rent', 'rental', 'market rent', 'base rent', 'gross']
+        if any(keyword in label_lower for keyword in rental_keywords):
+            result = {
+                'label': label,
+                'category': 'Gross Potential Rents',
+                'type': 'income',
+                'confidence': 0.85
+            }
+            self.cache[label] = result
+            return result
+
+        # Check for OTHER INCOME (reimbursements, fees, etc.)
+        other_income_keywords = ['fee', 'pet', 'parking', 'late', 'damage', 'interest', 'reimbursement', 'rubs', 'amenity', 'application', 'miscellaneous']
+        if any(keyword in label_lower for keyword in other_income_keywords):
+            result = {
+                'label': label,
+                'category': 'Other Income',
+                'type': 'income',
+                'confidence': 0.80
+            }
+            self.cache[label] = result
+            return result
+
+        # Default to "-" (unknown income item)
+        result = {
+            'label': label,
+            'category': '-',
+            'type': 'income',
+            'confidence': 0.0
+        }
+        self.cache[label] = result
+        return result
+
+    def _categorize_expense(self, label, amount):
+        """Categorize expense items - most items are expenses by default in this section."""
+        label_lower = label.lower()
+
+        # Check if it's clearly NOT an expense (recovery, refund, etc.)
+        non_expense_keywords = ['recovery', 'refund', 'reimbursement', 'income', 'fee (positive context)']
+        if any(keyword in label_lower for keyword in non_expense_keywords):
+            # Double-check: might be Other Income
+            if 'reimbursement' in label_lower or 'recovery' in label_lower:
+                result = {
+                    'label': label,
+                    'category': 'Other Income',
+                    'type': 'income',
+                    'confidence': 0.75
+                }
+                self.cache[label] = result
+                return result
+
+        # Default: Items in expense section are EXPENSES
+        result = {
+            'label': label,
+            'category': 'Expense',
+            'type': 'expense',
+            'confidence': 0.90
+        }
         self.cache[label] = result
         return result
 
@@ -206,7 +230,8 @@ class CategorizationEngine:
         for item in line_items:
             categorization = self.categorize_line_item(
                 item['label'],
-                sum(item['values']) if 'values' in item else 0
+                sum(item['values']) if 'values' in item else 0,
+                section='income'  # Default, will be overridden by UI logic
             )
             categorized.append({**item, **categorization})
         return categorized
@@ -264,6 +289,7 @@ st.header("📋 Categorisation")
 st.caption(f"**Property:** {parsed_t12['property_name']} | **Period:** {parsed_t12['period']}")
 
 engine = CategorizationEngine()
+# Initial categorization (will be refined in UI based on section)
 categorized = engine.categorize_batch(parsed_t12['line_items'])
 
 # Prepare table data - all line items without filtering
@@ -414,24 +440,28 @@ for idx, row in enumerate(table_data):
         st.write(f"**{original_amount:,.0f}**")
 
     with col3:
-        category_options = ['-'] + list(engine.CATEGORY_RULES.keys())
-
-        # Determine default category based on position
+        # Determine section and re-categorize using semantic engine
         if is_between_sections:
-            # Between Total Income and NOI: default to Expense
-            current_index = category_options.index('Expense') if 'Expense' in category_options else 0
+            section = 'expense'
+        elif idx > noi_idx if noi_idx is not None else False:
+            section = 'post_noi'
         else:
-            # Before Total Income or between NOI and end: use engine categorization
-            should_be_empty = (original_amount == 0 and 'total' in row['line_item'].lower())
+            section = 'income'
 
-            if should_be_empty:
-                current_index = 0  # Default to "-"
-            elif row['category'] == '-':
-                current_index = 0
-            elif row['category'] in category_options:
-                current_index = category_options.index(row['category'])
-            else:
-                current_index = 0
+        # Re-categorize based on section using semantic engine
+        semantic_cat = engine.categorize_line_item(row['line_item'], original_amount, section=section)
+        default_category = semantic_cat['category']
+
+        # Build category options - use 8 main categories plus "-"
+        category_options = ['-', 'Gross Potential Rents', 'Less: Vacancy Loss', 'Less: Loss to Lease',
+                           'Less: Bad Debt', 'Less: Concessions', 'Less: Non-Revenue Units',
+                           'Other Income', 'Expense']
+
+        # Determine default index
+        if default_category in category_options:
+            current_index = category_options.index(default_category)
+        else:
+            current_index = 0  # Default to "-"
 
         selected_cat = st.selectbox(
             "Category",
