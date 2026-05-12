@@ -289,7 +289,6 @@ except Exception as e:
 # ────────────────────────────────────────────────────────────────────────────
 
 st.markdown("---")
-st.subheader(f"📊 Property: {parsed_t12['property_name']}")
 
 engine = CategorizationEngine()
 # Initial categorization (will be refined in UI based on section)
@@ -367,8 +366,12 @@ for i, item in enumerate(table_data):
 # ────────────────────────────────────────────────────────────────────────────
 # SUMMARY TABLE: Compare T12 vs Categorisation
 # ────────────────────────────────────────────────────────────────────────────
-st.markdown("---")
-st.subheader("📋 Financial Summary: T12 vs Categorisation")
+# Header with property name box on right
+header_col1, header_col2 = st.columns([3, 1])
+with header_col1:
+    st.subheader("📋 Financial Summary: T12 vs Categorisation")
+with header_col2:
+    st.info(f"📍 {parsed_t12['property_name']}", icon="")
 
 # Find Total Expense line (usually just before NOI)
 total_expense_line = None
@@ -396,11 +399,11 @@ if st.session_state.selected_noi != '--':
             noi_t12 = item['amount']
             break
 
-# Create summary table columns
-col_particular, col_t12, col_cat, col_check = st.columns([2.5, 2, 2, 2.5])
+# Create summary table header - no "Particular" label
+col_particular, col_t12, col_cat, col_check = st.columns([1.5, 1.8, 2.0, 1.8])
 
 with col_particular:
-    st.markdown("**Particular**")
+    st.markdown("")  # Blank instead of "Particular"
 with col_t12:
     st.markdown("**As per T12**")
 with col_cat:
@@ -411,44 +414,43 @@ with col_check:
 st.divider()
 
 # Row 1: Total Income
-col1, col2, col3, col4 = st.columns([2.5, 2, 2, 2.5])
+col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
 with col1:
     st.write("**Total Income**")
 with col2:
     st.write(f"${total_income_t12:,.0f}")
 with col3:
-    st.write("*[Calculated from categorisation]*")
+    st.write("*[Calculating...]*")
 with col4:
-    st.write("*[To be calculated]*")
+    st.write("—")
 
 # Row 2: Total Expense
-col1, col2, col3, col4 = st.columns([2.5, 2, 2, 2.5])
+col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
 with col1:
     st.write("**Total Expense**")
 with col2:
     st.write(f"${total_expense_amount:,.0f}" if total_expense_line else "—")
 with col3:
-    st.write("*[Calculated from categorisation]*")
+    st.write("*[Calculating...]*")
 with col4:
-    st.write("*[To be calculated]*")
+    st.write("—")
 
 # Row 3: NOI
-col1, col2, col3, col4 = st.columns([2.5, 2, 2, 2.5])
+col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
 with col1:
     st.write("**NOI**")
 with col2:
     st.write(f"${noi_t12:,.0f}")
 with col3:
-    st.write("*[Calculated from categorisation]*")
+    st.write("*[Calculating...]*")
 with col4:
-    st.write("*[To be calculated]*")
+    st.write("—")
 
 st.markdown("---")
 
-# Download button
-col_download, col_space = st.columns([1, 4])
-with col_download:
-    st.info("ℹ️ Download option will be available after review", icon="ℹ️")
+# Download button - same size as Run AI button
+if st.button("📥 Download to Excel", use_container_width=True, type="primary", help="Download categorized T12 as Excel"):
+    st.info("📊 Download feature coming soon!", icon="ℹ️")
 
 # ────────────────────────────────────────────────────────────────────────────
 # STEP 1: Review & Adjust AI Categorisation
