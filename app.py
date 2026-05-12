@@ -366,12 +366,12 @@ for i, item in enumerate(table_data):
 # ────────────────────────────────────────────────────────────────────────────
 # SUMMARY TABLE: Compare T12 vs Categorisation
 # ────────────────────────────────────────────────────────────────────────────
-# Header with property name box on right
-header_col1, header_col2 = st.columns([3, 1])
+# Header with property name right-aligned (no box)
+header_col1, header_col2 = st.columns([2.5, 1.5])
 with header_col1:
     st.subheader("📋 Financial Summary: T12 vs Categorisation")
 with header_col2:
-    st.info(f"📍 {parsed_t12['property_name']}")
+    st.markdown(f"<p style='text-align: right; margin-top: 10px;'><small>📍 {parsed_t12['property_name']}</small></p>", unsafe_allow_html=True)
 
 # Find Total Expense line (usually just before NOI)
 total_expense_line = None
@@ -399,21 +399,7 @@ if st.session_state.selected_noi != '--':
             noi_t12 = item['amount']
             break
 
-# Create summary table header - no "Particular" label
-col_particular, col_t12, col_cat, col_check = st.columns([1.5, 1.8, 2.0, 1.8])
-
-with col_particular:
-    st.markdown("")  # Blank instead of "Particular"
-with col_t12:
-    st.markdown("**As per T12**")
-with col_cat:
-    st.markdown("**As per Categorisation**")
-with col_check:
-    st.markdown("**Error Check**")
-
-st.divider()
-
-# Row 1: Total Income
+# Display data rows (no header row)
 col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
 with col1:
     st.write("**Total Income**")
@@ -424,7 +410,6 @@ with col3:
 with col4:
     st.write("—")
 
-# Row 2: Total Expense
 col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
 with col1:
     st.write("**Total Expense**")
@@ -435,7 +420,6 @@ with col3:
 with col4:
     st.write("—")
 
-# Row 3: NOI
 col1, col2, col3, col4 = st.columns([1.5, 1.8, 2.0, 1.8])
 with col1:
     st.write("**NOI**")
@@ -448,9 +432,11 @@ with col4:
 
 st.markdown("---")
 
-# Download button - same size as Run AI button
-if st.button("📥 Download to Excel", use_container_width=True, type="primary", help="Download categorized T12 as Excel"):
-    st.info("📊 Download feature coming soon!", icon="ℹ️")
+# Download button - 50% width on left
+col_download, col_space = st.columns([1, 1])
+with col_download:
+    if st.button("📥 Download to Excel", use_container_width=True, type="primary", help="Download categorized T12 as Excel"):
+        st.info("📊 Download feature coming soon!")
 
 # ────────────────────────────────────────────────────────────────────────────
 # STEP 1: Review & Adjust AI Categorisation
