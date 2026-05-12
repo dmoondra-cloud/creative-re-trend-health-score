@@ -13,6 +13,11 @@ from io import StringIO, BytesIO
 import os
 import shutil
 
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(SCRIPT_DIR, "templates")
+TEMPLATE_PATH = os.path.join(TEMPLATES_DIR, "THS_Template_Default.xlsx")
+
 # ============================================================================
 # EMBEDDED: T12 PARSER
 # ============================================================================
@@ -245,7 +250,7 @@ class CategorizationEngine:
 def generate_t12_download(edited_items, property_name, parsed_t12):
     """
     Generate T12 sheet in THS template with categorized items.
-    - Loads preloaded template
+    - Uses preloaded template from app folder
     - Fills T12 sheet starting from row 10
     - Column C = Category
     - Column D = Line Item Name
@@ -253,19 +258,12 @@ def generate_t12_download(edited_items, property_name, parsed_t12):
     - Returns BytesIO object for download
     """
     try:
-        # Get template path - look in app folder
-        template_path = "THS_Template_Default.xlsx"
-
-        # If not found, try alternative path
-        if not os.path.exists(template_path):
-            import sys
-            template_path = os.path.join(os.path.dirname(__file__), "THS_Template_Default.xlsx")
-
-        if not os.path.exists(template_path):
-            return None, "Template file not found"
+        # Check if template exists
+        if not os.path.exists(TEMPLATE_PATH):
+            return None, f"Template not found at: {TEMPLATE_PATH}"
 
         # Load template
-        wb = openpyxl.load_workbook(template_path)
+        wb = openpyxl.load_workbook(TEMPLATE_PATH)
         ws = wb["T12"]
 
         # Fill T12 sheet starting from row 10
@@ -511,7 +509,7 @@ with left_col:
 col_download, col_space = st.columns([1, 1])
 with col_download:
     if st.button("📥 Download to Excel", use_container_width=True, type="primary", help="Download categorized T12 as Excel"):
-        # Generate Excel file with categorized T12
+        # Generate Excel file with categorized T12 using preloaded template
         excel_file, error = generate_t12_download(st.session_state.t12_categorized, parsed_t12['property_name'], parsed_t12)
 
         if error:
