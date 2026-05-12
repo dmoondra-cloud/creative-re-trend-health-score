@@ -266,39 +266,114 @@ for item in categorized:
     })
     item_idx += 1
 
-# STEP 1: Mark Income/NOI sections
+# ────────────────────────────────────────────────────────────────────────────
+# STEP 0: Select Total Income & NOI Line Items
+# ────────────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.subheader("STEP 1: Mark Income/NOI Sections")
-st.markdown('**Select "-", "Total Income", or "NOI" for each line item**')
+st.subheader("STEP 0: Mark Total Income & NOI Line Items")
+st.markdown('**Select which line items represent "Total Income" and "NOI" to stop categorization after NOI**')
 
-# Table header for section marking
-header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([0.8, 2.2, 1.0, 1.5, 1.5, 0.8])
+# Get list of all non-section line items for dropdown
+all_line_items = [row['line_item'] for row in table_data if not row['is_section']]
+
+col_ti, col_noi = st.columns(2)
+
+with col_ti:
+    selected_total_income = st.selectbox(
+        "Select Total Income Line Item:",
+        options=['--'] + all_line_items,
+        index=0,
+        key="total_income_select"
+    )
+
+with col_noi:
+    selected_noi = st.selectbox(
+        "Select NOI Line Item:",
+        options=['--'] + all_line_items,
+        index=0,
+        key="noi_select"
+    )
+
+# Store selections in session state
+st.session_state.selected_total_income = selected_total_income
+st.session_state.selected_noi = selected_noi
+
+# ────────────────────────────────────────────────────────────────────────────
+# STEP 1: Categorisation
+# ────────────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("STEP 1: Categorisation & Adjustments")
+st.markdown("**Configure categories, multipliers, and amounts for each line item**")
+
+# Table header for categorisation
+header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
 with header_col1:
-    st.markdown("**Income/NOI**")
-with header_col2:
     st.markdown("**Line Item**")
+with header_col2:
+    st.markdown("**Name**")
 with header_col3:
-    st.markdown("**Amount**")
+    st.markdown("**Orig. Amt**")
 with header_col4:
-    st.markdown("**Category**")
-with header_col5:
-    st.markdown("**Type**")
-with header_col6:
     st.markdown("**Mult.**")
+with header_col5:
+    st.markdown("**Result**")
+with header_col6:
+    st.markdown("**Category**")
+with header_col7:
+    st.markdown("**Marker**")
 
 st.markdown("---")
 
-# Table rows - Step 1: Mark sections only
-section_selections = []
-for idx, row in enumerate(table_data):
-    col1, col2, col3, col4, col5, col6 = st.columns([0.8, 2.2, 1.0, 1.5, 1.5, 0.8])
+# Table rows - Categorisation
+edited_items = []
+categorization_stopped = False
 
-    # Style section headers differently
-    if row['is_section']:
+for idx, row in enumerate(table_data):
+    # Check if we've reached NOI - stop categorization after this
+    if st.session_state.selected_noi != '--' and row['line_item'] == st.session_state.selected_noi:
+        # Mark this as NOI but don't categorize anything after it
+        categorization_stopped = True
+
+    # After NOI, only show the line item without categorization options
+    if categorization_stopped and row['line_item'] != st.session_state.selected_noi:
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+
         with col1:
-            st.write("📌")  # Section header marker
+            st.write("🔒")  # Locked marker
         with col2:
-            st.markdown(f"**{row['line_item'].upper()}**")  # Bold, uppercase
+            st.markdown(f"**{row['line_item'][:30]}** (Post-NOI)")
+        with col3:
+            st.write(f"**{row['amount']:,.0f}**")
+        with col4:
+            st.write("—")
+        with col5:
+            st.write("—")
+        with col6:
+            st.write("—")
+        with col7:
+            st.write("")
+
+        edited_items.append({
+            'label': row['line_item'],
+            'original_amount': row['amount'],
+            'multiplier': 1,
+            'adjusted_amount': row['amount'],
+            'category': '-',
+            'section_type': '-',
+            'values': row,
+            'is_section_header': False,
+            'is_post_noi': True
+        })
+        continue
+
+    # Section headers styling
+    if row['is_section']:
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+
+        with col1:
+            st.write("📌")  # Section marker
+        with col2:
+            st.markdown(f"**{row['line_item'].upper()}**")
         with col3:
             st.write("")
         with col4:
@@ -307,241 +382,165 @@ for idx, row in enumerate(table_data):
             st.write("")
         with col6:
             st.write("")
+        with col7:
+            st.write("")
 
-        section_selections.append({
-            'section': '-',
-            'data': row,
-            'is_section_header': True
+        edited_items.append({
+            'label': row['line_item'],
+            'original_amount': 0,
+            'multiplier': 1,
+            'adjusted_amount': 0,
+            'category': '-',
+            'section_type': '-',
+            'values': row,
+            'is_section_header': True,
+            'is_post_noi': False
         })
     else:
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.0, 1.0, 0.8, 1.0, 2.0, 0.8])
+
+        original_amount = row['amount']
+
         with col1:
-            selected_section = st.selectbox(
-                "Section",
-                options=['-', 'Total Income', 'NOI'],
+            marker = ""
+            if row['line_item'] == st.session_state.selected_total_income:
+                marker = "💰 TI"
+            elif row['line_item'] == st.session_state.selected_noi:
+                marker = "📊 NOI"
+            st.write(marker)
+
+        with col2:
+            st.write(f"`{row['line_item'][:25]}`")
+
+        with col3:
+            st.write(f"**{original_amount:,.0f}**")
+
+        with col4:
+            multiplier_value = st.selectbox(
+                "Multiplier",
+                options=[1, -1],
+                format_func=lambda x: f"+{x}" if x > 0 else f"{x}",
                 index=0,
-                key=f"section_{idx}_{hash(row['line_item']) % 10000}",
+                key=f"mult_{idx}_{hash(row['line_item']) % 10000}",
                 label_visibility="collapsed"
             )
 
-        with col2:
-            st.write(f"`{row['line_item'][:35]}`")
-
-        with col3:
-            st.write(f"**{row['amount']:,.0f}**")
-
-        with col4:
-            st.write(f"`{row['category']}`")
-
         with col5:
-            st.write(f"`{row['income_expense_type']}`")
+            adjusted_amount = original_amount * multiplier_value
+            display_text = "same" if adjusted_amount == original_amount else f"{adjusted_amount:,.0f}"
+            st.write(f"**{display_text}**")
 
         with col6:
-            st.write(f"`{row['multiplier']}`")
+            selected_cat = st.selectbox(
+                "Category",
+                options=list(engine.CATEGORY_RULES.keys()),
+                index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
+                key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
+                label_visibility="collapsed"
+            )
 
-        section_selections.append({
-            'section': selected_section,
-            'data': row,
-            'is_section_header': False
+        with col7:
+            marker_text = "🔄" if multiplier_value == -1 else ""
+            st.write(marker_text)
+
+        edited_items.append({
+            'label': row['line_item'],
+            'original_amount': original_amount,
+            'multiplier': multiplier_value,
+            'adjusted_amount': adjusted_amount,
+            'category': selected_cat,
+            'section_type': '-',
+            'values': row,
+            'is_section_header': False,
+            'is_post_noi': False
         })
 
-# Store section selections and show "Run Categorisation" button
+st.session_state.t12_categorized = edited_items
+
 st.markdown("---")
+st.header("✅ Financial Summary")
 
-if st.button("▶️ Run Categorisation", use_container_width=True, type="primary"):
-    st.session_state.sections_marked = True
-    st.session_state.section_selections = section_selections
-    st.rerun()
+categorized_items = st.session_state.get('t12_categorized', [])
 
-# STEP 2: Categorisation (only show if sections are marked)
-if st.session_state.get('sections_marked', False):
-    st.markdown("---")
-    st.subheader("STEP 2: Categorisation")
-    st.markdown("**Select categories for each line item**")
+# Filter out post-NOI items for calculation
+pre_noi_items = [i for i in categorized_items if not i.get('is_post_noi', False)]
 
-    # Table header for categorisation
-    header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([0.9, 2.0, 1.0, 0.7, 1.0, 2.0, 0.6])
-    with header_col1:
-        st.markdown("**Income/NOI**")
-    with header_col2:
-        st.markdown("**Line Item**")
-    with header_col3:
-        st.markdown("**Orig. Amt**")
-    with header_col4:
-        st.markdown("**Mult.**")
-    with header_col5:
-        st.markdown("**Adj. Amt**")
-    with header_col6:
-        st.markdown("**Category**")
-    with header_col7:
-        st.markdown("**Marker**")
+# Calculate totals as per categorisation
+total_income_categorized = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] == 'Gross Potential Rents'])
 
-    st.markdown("---")
+# Deductions (all the "Less:" categories)
+deductions = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] in ['Less: Vacancy Loss', 'Less: Loss to Lease', 'Less: Non-Revenue Units', 'Less: Concessions', 'Less: Bad Debt']])
 
-    # Table rows - Step 2: Categorisation
-    edited_items = []
-    for idx, selection in enumerate(st.session_state.section_selections):
-        row = selection['data']
-        selected_section = selection['section']
-        original_amount = row['amount']
-        is_section_header = selection.get('is_section_header', False)
+net_income = total_income_categorized - deductions
 
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([0.9, 2.0, 1.0, 0.7, 1.0, 2.0, 0.6])
+# Other Income
+other_income = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] == 'Other Income'])
 
-        # Section headers have different styling
-        if is_section_header:
-            with col1:
-                st.write("📌")
-            with col2:
-                st.markdown(f"**{row['line_item'].upper()}**")
-            with col3:
-                st.write("")
-            with col4:
-                st.write("")
-            with col5:
-                st.write("")
-            with col6:
-                st.write("")
-            with col7:
-                st.write("")
+# Total Expenses
+total_expenses = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] == 'Expense'])
 
-            edited_items.append({
-                'label': row['line_item'],
-                'original_amount': original_amount,
-                'multiplier': 1,
-                'adjusted_amount': original_amount,
-                'category': '-',
-                'section_type': '-',
-                'values': row,
-                'is_section_header': True
-            })
-        else:
-            with col1:
-                st.write(f"**{selected_section}**")
+# NOI = (Gross Potential Rents - Deductions + Other Income) - Expenses
+noi_categorized = net_income + other_income - total_expenses
 
-            with col2:
-                st.write(f"`{row['line_item'][:35]}`")
+# Display As Per Categorisation
+st.subheader("As Per Categorisation")
+col1, col2, col3 = st.columns(3)
 
-            with col3:
-                st.write(f"**{original_amount:,.0f}**")
+with col1:
+    st.metric("💰 Total Income", f"${total_income_categorized:,.0f}")
+with col2:
+    st.metric("📉 Total Expenses", f"${total_expenses:,.0f}")
+with col3:
+    st.metric("📊 NOI", f"${noi_categorized:,.0f}")
 
-            with col4:
-                multiplier_value = st.selectbox(
-                    "Multiplier",
-                    options=[1, -1],
-                    format_func=lambda x: f"+{x}" if x > 0 else f"{x}",
-                    index=0,
-                    key=f"mult_{idx}_{hash(row['line_item']) % 10000}",
-                    label_visibility="collapsed"
-                )
-
-            with col5:
-                adjusted_amount = original_amount * multiplier_value
-                st.write(f"**{adjusted_amount:,.0f}**")
-
-            with col6:
-                selected_cat = st.selectbox(
-                    "Category",
-                    options=list(engine.CATEGORY_RULES.keys()),
-                    index=list(engine.CATEGORY_RULES.keys()).index(row['category']) if row['category'] in engine.CATEGORY_RULES else 0,
-                    key=f"cat_{idx}_{hash(row['line_item']) % 10000}",
-                    label_visibility="collapsed"
-                )
-
-            with col7:
-                marker_text = "🔄" if multiplier_value == -1 else ""
-                st.write(marker_text)
-
-            edited_items.append({
-                'label': row['line_item'],
-                'original_amount': original_amount,
-                'multiplier': multiplier_value,
-                'adjusted_amount': adjusted_amount,
-                'category': selected_cat,
-                'section_type': selected_section,
-                'values': row,
-                'is_section_header': False
-            })
-
-    st.session_state.t12_categorized = edited_items
-
-if st.session_state.get('sections_marked', False):
-    st.markdown("---")
-    st.header("✅ Financial Summary")
-
-    categorized_items = st.session_state.get('t12_categorized', [])
-
-    # Calculate totals as per categorisation
-    total_income_categorized = sum([i['adjusted_amount'] for i in categorized_items if i['category'] == 'Gross Potential Rents'])
-
-    # Deductions (all the "Less:" categories)
-    deductions = sum([i['adjusted_amount'] for i in categorized_items if i['category'] in ['Less: Vacancy Loss', 'Less: Loss to Lease', 'Less: Non-Revenue Units', 'Less: Concessions', 'Less: Bad Debt']])
-
-    net_income = total_income_categorized - deductions
-
-    # Other Income
-    other_income = sum([i['adjusted_amount'] for i in categorized_items if i['category'] == 'Other Income'])
-
-    # Total Expenses
-    total_expenses = sum([i['adjusted_amount'] for i in categorized_items if i['category'] == 'Expense'])
-
-    # NOI = (Gross Potential Rents - Deductions + Other Income) - Expenses
-    noi_categorized = net_income + other_income - total_expenses
-
-    # Display As Per Categorisation
-    st.subheader("As Per Categorisation")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("💰 Total Income", f"${total_income_categorized:,.0f}")
-    with col2:
-        st.metric("📉 Total Expenses", f"${total_expenses:,.0f}")
-    with col3:
-        st.metric("📊 NOI", f"${noi_categorized:,.0f}")
-
-    # Display breakdown
-    st.markdown("---")
-    st.write("**Income Breakdown:**")
-    breakdown_cols = st.columns([2, 1])
-    with breakdown_cols[0]:
-        st.write(f"Gross Potential Rents: ${total_income_categorized:,.0f}")
-        st.write(f"Less: Deductions: -${deductions:,.0f}")
-        st.write(f"Net Income: ${net_income:,.0f}")
-        st.write(f"Plus: Other Income: ${other_income:,.0f}")
-        st.divider()
-        st.write(f"**Total Rental Income: ${net_income + other_income:,.0f}**")
-
-    st.write("**Expense Breakdown:**")
-    with breakdown_cols[0]:
-        st.write(f"Total Operating Expenses: ${total_expenses:,.0f}")
-
+# Display breakdown
+st.markdown("---")
+st.write("**Income Breakdown:**")
+breakdown_cols = st.columns([2, 1])
+with breakdown_cols[0]:
+    st.write(f"Gross Potential Rents: ${total_income_categorized:,.0f}")
+    st.write(f"Less: Deductions: -${deductions:,.0f}")
+    st.write(f"Net Income: ${net_income:,.0f}")
+    st.write(f"Plus: Other Income: ${other_income:,.0f}")
     st.divider()
-    st.write(f"**Net Operating Income (NOI): ${noi_categorized:,.0f}**")
+    st.write(f"**Total Rental Income: ${net_income + other_income:,.0f}**")
 
-    st.markdown("---")
-    st.subheader("📥 Export Categorized T12")
+st.write("**Expense Breakdown:**")
+with breakdown_cols[0]:
+    st.write(f"Total Operating Expenses: ${total_expenses:,.0f}")
 
-    if st.button("✅ Export as CSV", use_container_width=True, type="primary"):
-        export_data = []
-        for item in st.session_state.get('t12_categorized', []):
-            export_data.append({
-                'Line Item': item['label'],
-                'Original Amount': item['original_amount'],
-                'Multiplier': f"+{item['multiplier']}" if item['multiplier'] > 0 else f"{item['multiplier']}",
-                'Adjusted Amount': item['adjusted_amount'],
-                'Category': item['category'],
-                'Section': item['section_type']
-            })
+st.divider()
+st.write(f"**Net Operating Income (NOI): ${noi_categorized:,.0f}**")
 
-        df_export = pd.DataFrame(export_data)
-        csv = df_export.to_csv(index=False)
+if st.session_state.selected_noi != '--':
+    st.info(f"✅ Categorization stops after: **{st.session_state.selected_noi}**")
 
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv,
-            file_name=f"T12_Categorized_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
-        st.success("✅ Ready!")
+st.markdown("---")
+st.subheader("📥 Export Categorized T12")
+
+if st.button("✅ Export as CSV", use_container_width=True, type="primary"):
+    export_data = []
+    for item in st.session_state.get('t12_categorized', []):
+        post_noi_marker = " (Post-NOI - Not Categorized)" if item.get('is_post_noi', False) else ""
+        export_data.append({
+            'Line Item': item['label'] + post_noi_marker,
+            'Original Amount': item['original_amount'],
+            'Multiplier': f"+{item['multiplier']}" if item['multiplier'] > 0 else f"{item['multiplier']}",
+            'Adjusted Amount': item['adjusted_amount'],
+            'Category': item['category'],
+            'Section': item['section_type']
+        })
+
+    df_export = pd.DataFrame(export_data)
+    csv = df_export.to_csv(index=False)
+
+    st.download_button(
+        label="📥 Download CSV",
+        data=csv,
+        file_name=f"T12_Categorized_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv"
+    )
+    st.success("✅ Ready!")
 
 st.markdown("---")
 st.markdown("<p style='text-align:center'><small>Creative RE T12 Categorizer | Minimal Version</small></p>", unsafe_allow_html=True)
