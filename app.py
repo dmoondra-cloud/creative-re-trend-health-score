@@ -462,6 +462,19 @@ for i, item in enumerate(table_data):
     if item['line_item'] == st.session_state.selected_noi:
         noi_idx = i
 
+# Header row - same column widths as data rows
+header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0])
+with header_col1:
+    st.markdown("**Line Item**")
+with header_col2:
+    st.markdown("**Orig. Amt**")
+with header_col3:
+    st.markdown("**Category**")
+with header_col4:
+    st.markdown("**Mult.**")
+with header_col5:
+    st.markdown("**Result**")
+
 # Table rows - Categorisation
 edited_items = []
 categorization_stopped = False
