@@ -90,36 +90,39 @@ class CategorizationEngine:
 
     CATEGORY_RULES = {
         'Gross Potential Rents': {
-            'patterns': [r'\bGross\s+Potential\s+Rent\b', r'\bGPR\b', r'^\s*Gross Rental Income$'],
-            'type': 'income'
+            'patterns': [r'\bGross\s+(?:Market|Potential)?\s+Rent', r'\bGPR\b', r'Gross\s+Rental\s+Income', r'Market\s+Rent'],
+            'type': 'income',
+            'priority': 100
         },
         'Less: Vacancy Loss': {
-            'patterns': [r'Vacancy\s+Loss', r'Vacant Unit', r'Unoccupied'],
-            'type': 'income'
+            'patterns': [r'\bVacancy\b', r'Vacant\s+Unit', r'Unoccupied', r'Vacancy\s+Loss'],
+            'type': 'income',
+            'priority': 90
         },
         'Less: Loss to Lease': {
-            'patterns': [r'Loss.*to.*Lease', r'Lease.*Loss'],
-            'type': 'income'
-        },
-        'Less: Non-Revenue Units': {
-            'patterns': [r'Non[\-]?Revenue', r'Model', r'Admin'],
-            'type': 'income'
-        },
-        'Less: Concessions': {
-            'patterns': [r'Rent\s+Concessions?', r'Concession', r'Lease Concession'],
-            'type': 'income'
+            'patterns': [r'\bLoss\b.*\bLease\b', r'Contract\s+Gain.*Loss', r'\bLTL\b'],
+            'type': 'income',
+            'priority': 90
         },
         'Less: Bad Debt': {
-            'patterns': [r'Bad\s+Debt', r'Allowance.*Doubtful'],
-            'type': 'income'
+            'patterns': [r'\bBad\s+Debt\b(?!\s+Recovery)', r'Allowance.*Doubtful', r'Uncollectible'],
+            'type': 'income',
+            'priority': 85
+        },
+        'Less: Concessions': {
+            'patterns': [r'Concession', r'Conc\s*-', r'Move[\s\-]?in\s+Special', r'Rent\s+Reduction', r'Rent\s+Concession'],
+            'type': 'income',
+            'priority': 85
+        },
+        'Less: Non-Revenue Units': {
+            'patterns': [r'Model\s+Unit', r'Admin\s+Unit', r'Office\s+Unit', r'Down\s+Unit', r'Employee\s+Unit', r'Non[\s\-]?Revenue', r'Courtesy.*Discount'],
+            'type': 'income',
+            'priority': 85
         },
         'Other Income': {
-            'patterns': [r'Other\s+Income', r'Pet\s+Fees', r'Parking', r'Laundry', r'Late\s+Fees', r'RUBS'],
-            'type': 'income'
-        },
-        'Expense': {
-            'patterns': [r'Expense', r'Payroll', r'Utilities', r'Repairs', r'Management', r'Insurance', r'Taxes'],
-            'type': 'expense'
+            'patterns': [r'\bOther\s+(?:Property\s+)?Income', r'Pet\s+(?:Fee|Rent)', r'Parking', r'Laundry', r'Late\s+(?:Fee|Charge)', r'Application\s+Fee', r'Amenity\s+Fee', r'Reimbursement', r'RUBS', r'Damage\s+(?:Fee|Income)', r'Interest\s+Income', r'(?:Key|Access)\s+(?:Fee|Card)', r'Lease\s+Violation', r'Legal\s+(?:Fee|Collection)', r'NSF', r'Storage', r'Miscellaneous\s+Income', r'Administrative\s+Fee'],
+            'type': 'income',
+            'priority': 70
         }
     }
 
@@ -127,35 +130,59 @@ class CategorizationEngine:
         self.cache = {}
 
     def categorize_line_item(self, label, value=0):
-        """Categorize a single line item."""
+        """Categorize a single line item based on semantic matching."""
         if label in self.cache:
             return self.cache[label]
 
-        result = {
-            'label': label,
-            'category': 'Other Income',
-            'type': 'income',
-            'confidence': 0.0
-        }
+        # Check if this is a header/total line that should be "-"
+        has_empty_amount = (value == 0 and 'total' in label.lower())
+        if has_empty_amount:
+            result = {
+                'label': label,
+                'category': '-',
+                'type': 'income',
+                'confidence': 1.0
+            }
+            self.cache[label] = result
+            return result
 
+        # Try to match against category rules
         best_match = None
         best_score = 0
+        best_priority = -1
 
         for category, rules in self.CATEGORY_RULES.items():
+            priority = rules.get('priority', 50)
+
             for pattern in rules['patterns']:
                 match = re.search(pattern, label, re.IGNORECASE)
                 if match:
-                    score = 100 - (match.start() / len(label) * 20)
-                    if score > best_score:
-                        best_score = score
+                    # Score based on match position and priority
+                    position_score = 100 - (match.start() / max(len(label), 1) * 30)
+                    total_score = position_score + priority
+
+                    if total_score > best_score or (total_score == best_score and priority > best_priority):
+                        best_score = total_score
+                        best_priority = priority
                         best_match = {
                             'category': category,
                             'type': rules['type'],
-                            'confidence': min(1.0, score / 100)
+                            'confidence': min(1.0, best_score / 150)
                         }
 
+        # Default to "-" if no match found (let the UI decide)
         if best_match:
-            result.update(best_match)
+            result = {
+                'label': label,
+                **best_match
+            }
+        else:
+            result = {
+                'label': label,
+                'category': '-',
+                'type': 'income',
+                'confidence': 0.0
+            }
 
         self.cache[label] = result
         return result
@@ -349,6 +376,21 @@ for idx, row in enumerate(table_data):
 
     original_amount = row['amount']
 
+    # Determine if this item is before, between, or after Total Income/NOI
+    is_between_sections = False
+    total_income_idx = None
+    noi_idx = None
+
+    # Find indices of Total Income and NOI
+    for i, item in enumerate(table_data):
+        if item['line_item'] == st.session_state.selected_total_income:
+            total_income_idx = i
+        if item['line_item'] == st.session_state.selected_noi:
+            noi_idx = i
+
+    if total_income_idx is not None and noi_idx is not None:
+        is_between_sections = total_income_idx < idx < noi_idx
+
     with col1:
         marker = ""
         if row['line_item'] == st.session_state.selected_total_income:
@@ -363,15 +405,27 @@ for idx, row in enumerate(table_data):
     with col3:
         category_options = ['-'] + list(engine.CATEGORY_RULES.keys())
 
-        # Auto-set to "-" for items with zero amount or containing "total"
-        should_be_empty = (original_amount == 0) or ('total' in row['line_item'].lower())
-
-        if should_be_empty:
-            current_index = 0  # Default to "-"
-        elif row['category'] in engine.CATEGORY_RULES:
-            current_index = category_options.index(row['category'])
-        else:
+        # Determine default category based on position
+        if is_between_sections:
+            # Between Total Income and NOI: default to Expense
             current_index = 0
+            default_cat = "Expense"
+        else:
+            # Before Total Income or between NOI and end: use engine categorization
+            should_be_empty = (original_amount == 0 and 'total' in row['line_item'].lower())
+
+            if should_be_empty:
+                current_index = 0  # Default to "-"
+                default_cat = "-"
+            elif row['category'] == '-':
+                current_index = 0
+                default_cat = "-"
+            elif row['category'] in category_options:
+                current_index = category_options.index(row['category'])
+                default_cat = row['category']
+            else:
+                current_index = 0
+                default_cat = "-"
 
         selected_cat = st.selectbox(
             "Category",
