@@ -332,7 +332,7 @@ if st.session_state.get('sections_marked', False):
     st.markdown("**Select categories for each line item**")
 
     # Table header for categorisation
-    header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([1.0, 2.2, 1.1, 1.0, 1.2, 1.3, 0.7])
+    header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([0.9, 2.0, 1.0, 0.7, 1.0, 2.0, 0.6])
     with header_col1:
         st.markdown("**Income/NOI**")
     with header_col2:
@@ -358,7 +358,7 @@ if st.session_state.get('sections_marked', False):
         original_amount = row['amount']
         is_section_header = selection.get('is_section_header', False)
 
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([1.0, 2.2, 1.1, 1.0, 1.2, 1.3, 0.7])
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([0.9, 2.0, 1.0, 0.7, 1.0, 2.0, 0.6])
 
         # Section headers have different styling
         if is_section_header:
