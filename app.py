@@ -39,37 +39,50 @@ class T12Parser:
         # Find data rows (scan for numeric data)
         for r in range(1, self.ws.max_row + 1):
             col_a = self.ws.cell(r, 1).value
+            if col_a is None:
+                col_a = self.ws.cell(r, 2).value
 
             if col_a is None:
                 continue
 
             label = str(col_a).strip()
-            if not label or len(label) < 2:
+            if not label or len(label) < 1:
                 continue
 
-            # Skip header/summary rows
-            if any(x in label.lower() for x in ['total', 'summary', 'header', 'property occupancy']):
+            # Skip only pure summary rows (not section headers)
+            if 'property occupancy' in label.lower():
                 continue
 
-            # Collect monthly values
+            # Detect section headers (low indent, typically uppercase or key section terms)
+            is_section = any(x in label.upper() for x in ['GROSS', 'LESS:', 'EXPENSE', 'INCOME', 'OPERATION', 'UTILITIES', 'PAYROLL'])
+            is_subtotal = 'TOTAL' in label.upper()
+
+            # Collect monthly values - scan all columns with numeric data
             values = []
-            for c in range(2, min(14, self.ws.max_column + 1)):
+            has_any_value = False
+            for c in range(2, min(20, self.ws.max_column + 1)):
                 try:
                     val = self.ws.cell(r, c).value
-                    if val is not None:
-                        values.append(float(val) if isinstance(val, (int, float)) else 0)
+                    if val is not None and isinstance(val, (int, float)):
+                        values.append(float(val))
+                        if val != 0:
+                            has_any_value = True
                     else:
                         values.append(0)
                 except:
                     values.append(0)
 
-            # Only include rows with data
-            if any(v != 0 for v in values):
+            # Include rows with label + either has data or is a section header
+            if has_any_value or is_section or is_subtotal:
+                # Pad to 12 months if needed
+                while len(values) < 12:
+                    values.append(0)
+
                 line_items.append({
                     'label': label,
-                    'values': values,
-                    'is_subtotal': 'total' in label.lower(),
-                    'is_section_header': False
+                    'values': values[:12],  # Take first 12 months
+                    'is_subtotal': is_subtotal,
+                    'is_section_header': is_section
                 })
 
         return {
@@ -259,7 +272,7 @@ st.subheader("STEP 1: Mark Income/NOI Sections")
 st.markdown('**Select "-", "Total Income", or "NOI" for each line item**')
 
 # Table header for section marking
-header_col1, header_col2, header_col3, header_col4 = st.columns([1.2, 3.0, 1.5, 1.0])
+header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([0.8, 2.2, 1.0, 1.5, 1.5, 0.8])
 with header_col1:
     st.markdown("**Income/NOI**")
 with header_col2:
@@ -267,14 +280,18 @@ with header_col2:
 with header_col3:
     st.markdown("**Amount**")
 with header_col4:
-    st.markdown("**Multiplier**")
+    st.markdown("**Category**")
+with header_col5:
+    st.markdown("**Type**")
+with header_col6:
+    st.markdown("**Mult.**")
 
 st.markdown("---")
 
 # Table rows - Step 1: Mark sections only
 section_selections = []
 for idx, row in enumerate(table_data):
-    col1, col2, col3, col4 = st.columns([1.2, 3.0, 1.5, 1.0])
+    col1, col2, col3, col4, col5, col6 = st.columns([0.8, 2.2, 1.0, 1.5, 1.5, 0.8])
 
     # Style section headers differently
     if row['is_section']:
@@ -285,6 +302,10 @@ for idx, row in enumerate(table_data):
         with col3:
             st.write("")
         with col4:
+            st.write("")
+        with col5:
+            st.write("")
+        with col6:
             st.write("")
 
         section_selections.append({
@@ -303,12 +324,18 @@ for idx, row in enumerate(table_data):
             )
 
         with col2:
-            st.write(f"`{row['line_item'][:40]}`")
+            st.write(f"`{row['line_item'][:35]}`")
 
         with col3:
             st.write(f"**{row['amount']:,.0f}**")
 
         with col4:
+            st.write(f"`{row['category']}`")
+
+        with col5:
+            st.write(f"`{row['income_expense_type']}`")
+
+        with col6:
             st.write(f"`{row['multiplier']}`")
 
         section_selections.append({
