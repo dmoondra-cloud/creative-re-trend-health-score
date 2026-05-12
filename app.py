@@ -285,12 +285,11 @@ except Exception as e:
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────────────
-# CATEGORISATION
+# SUMMARY TABLE
 # ────────────────────────────────────────────────────────────────────────────
 
-st.header("📋 Categorisation")
-
-st.caption(f"**Property:** {parsed_t12['property_name']} | **Period:** {parsed_t12['period']}")
+st.markdown("---")
+st.subheader(f"📊 Property: {parsed_t12['property_name']}")
 
 engine = CategorizationEngine()
 # Initial categorization (will be refined in UI based on section)
@@ -352,9 +351,95 @@ with right_col:
 
 st.markdown("---")
 
-# Only show STEP 1 if user clicked Run AI Categorisation
+# Only show content if user clicked Run AI Categorisation
 if not st.session_state.get('step1_complete', False):
     st.stop()
+
+# ────────────────────────────────────────────────────────────────────────────
+# SUMMARY TABLE: Compare T12 vs Categorisation
+# ────────────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.subheader("📋 Financial Summary: T12 vs Categorisation")
+
+# Find Total Expense line (usually just before NOI)
+total_expense_line = None
+total_expense_amount = 0
+if noi_idx is not None and noi_idx > 0:
+    # Look backwards from NOI to find "TOTAL EXPENSE" or "TOTAL OPERATING EXPENSE"
+    for i in range(noi_idx - 1, -1, -1):
+        if i < len(table_data):
+            if 'total' in table_data[i]['line_item'].lower() and 'expense' in table_data[i]['line_item'].lower():
+                total_expense_line = table_data[i]['line_item']
+                total_expense_amount = table_data[i]['amount']
+                break
+
+# Get values from T12 (user selections)
+total_income_t12 = 0
+noi_t12 = 0
+if st.session_state.selected_total_income != '--':
+    for item in table_data:
+        if item['line_item'] == st.session_state.selected_total_income:
+            total_income_t12 = item['amount']
+            break
+if st.session_state.selected_noi != '--':
+    for item in table_data:
+        if item['line_item'] == st.session_state.selected_noi:
+            noi_t12 = item['amount']
+            break
+
+# Create summary table columns
+col_particular, col_t12, col_cat, col_check = st.columns([2.5, 2, 2, 2.5])
+
+with col_particular:
+    st.markdown("**Particular**")
+with col_t12:
+    st.markdown("**As per T12**")
+with col_cat:
+    st.markdown("**As per Categorisation**")
+with col_check:
+    st.markdown("**Error Check**")
+
+st.divider()
+
+# Row 1: Total Income
+col1, col2, col3, col4 = st.columns([2.5, 2, 2, 2.5])
+with col1:
+    st.write("**Total Income**")
+with col2:
+    st.write(f"${total_income_t12:,.0f}")
+with col3:
+    st.write("*[Calculated from categorisation]*")
+with col4:
+    st.write("*[To be calculated]*")
+
+# Row 2: Total Expense
+col1, col2, col3, col4 = st.columns([2.5, 2, 2, 2.5])
+with col1:
+    st.write("**Total Expense**")
+with col2:
+    st.write(f"${total_expense_amount:,.0f}" if total_expense_line else "—")
+with col3:
+    st.write("*[Calculated from categorisation]*")
+with col4:
+    st.write("*[To be calculated]*")
+
+# Row 3: NOI
+col1, col2, col3, col4 = st.columns([2.5, 2, 2, 2.5])
+with col1:
+    st.write("**NOI**")
+with col2:
+    st.write(f"${noi_t12:,.0f}")
+with col3:
+    st.write("*[Calculated from categorisation]*")
+with col4:
+    st.write("*[To be calculated]*")
+
+st.markdown("---")
+
+# Download button
+col_download, col_space = st.columns([1, 4])
+with col_download:
+    st.info("ℹ️ Download option will be available after review", icon="ℹ️")
 
 # ────────────────────────────────────────────────────────────────────────────
 # STEP 1: Review & Adjust AI Categorisation
@@ -505,64 +590,6 @@ for idx, row in enumerate(table_data):
     })
 
 st.session_state.t12_categorized = edited_items
-
-st.markdown("---")
-st.header("✅ Financial Summary")
-
-categorized_items = st.session_state.get('t12_categorized', [])
-
-# Filter out post-NOI items for calculation
-pre_noi_items = [i for i in categorized_items if not i.get('is_post_noi', False)]
-
-# Calculate totals as per categorisation
-total_income_categorized = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] == 'Gross Potential Rents'])
-
-# Deductions (all the "Less:" categories)
-deductions = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] in ['Less: Vacancy Loss', 'Less: Loss to Lease', 'Less: Non-Revenue Units', 'Less: Concessions', 'Less: Bad Debt']])
-
-net_income = total_income_categorized - deductions
-
-# Other Income
-other_income = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] == 'Other Income'])
-
-# Total Expenses
-total_expenses = sum([i['adjusted_amount'] for i in pre_noi_items if i['category'] == 'Expense'])
-
-# NOI = (Gross Potential Rents - Deductions + Other Income) - Expenses
-noi_categorized = net_income + other_income - total_expenses
-
-# Display As Per Categorisation
-st.subheader("As Per Categorisation")
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("💰 Total Income", f"${total_income_categorized:,.0f}")
-with col2:
-    st.metric("📉 Total Expenses", f"${total_expenses:,.0f}")
-with col3:
-    st.metric("📊 NOI", f"${noi_categorized:,.0f}")
-
-# Display breakdown
-st.markdown("---")
-st.write("**Income Breakdown:**")
-breakdown_cols = st.columns([2, 1])
-with breakdown_cols[0]:
-    st.write(f"Gross Potential Rents: ${total_income_categorized:,.0f}")
-    st.write(f"Less: Deductions: -${deductions:,.0f}")
-    st.write(f"Net Income: ${net_income:,.0f}")
-    st.write(f"Plus: Other Income: ${other_income:,.0f}")
-    st.divider()
-    st.write(f"**Total Rental Income: ${net_income + other_income:,.0f}**")
-
-st.write("**Expense Breakdown:**")
-with breakdown_cols[0]:
-    st.write(f"Total Operating Expenses: ${total_expenses:,.0f}")
-
-st.divider()
-st.write(f"**Net Operating Income (NOI): ${noi_categorized:,.0f}**")
-
-if st.session_state.selected_noi != '--':
-    st.info(f"✅ Categorization stops after: **{st.session_state.selected_noi}**")
 
 st.markdown("---")
 st.subheader("📥 Export Categorized T12")
