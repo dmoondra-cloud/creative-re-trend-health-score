@@ -371,7 +371,7 @@ header_col1, header_col2 = st.columns([3, 1])
 with header_col1:
     st.subheader("📋 Financial Summary: T12 vs Categorisation")
 with header_col2:
-    st.info(f"📍 {parsed_t12['property_name']}", icon="")
+    st.info(f"📍 {parsed_t12['property_name']}")
 
 # Find Total Expense line (usually just before NOI)
 total_expense_line = None
