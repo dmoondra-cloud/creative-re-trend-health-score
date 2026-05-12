@@ -249,8 +249,8 @@ st.markdown("---")
 st.subheader("STEP 0: Mark Total Income & NOI Line Items")
 st.markdown('**Select which line items represent "Total Income" and "NOI" to stop categorization after NOI**')
 
-# Get list of all non-section line items for dropdown
-all_line_items = [row['line_item'] for row in table_data if not row['is_section']]
+# Get list of all line items for dropdown
+all_line_items = [row['line_item'] for row in table_data]
 
 col_ti, col_noi = st.columns(2)
 
@@ -282,7 +282,7 @@ st.subheader("STEP 1: Categorisation & Adjustments")
 st.markdown("**Configure categories, multipliers, and amounts for each line item**")
 
 # Table header for categorisation
-header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0, 1.0])
+header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0])
 with header_col1:
     st.markdown("**Line Item**")
 with header_col2:
@@ -293,8 +293,6 @@ with header_col4:
     st.markdown("**Mult.**")
 with header_col5:
     st.markdown("**Result**")
-with header_col6:
-    st.markdown("**Status**")
 
 st.markdown("---")
 
@@ -310,7 +308,7 @@ for idx, row in enumerate(table_data):
 
     # After NOI, only show the line item without categorization options
     if categorization_stopped and row['line_item'] != st.session_state.selected_noi:
-        col1, col2, col3, col4, col5, col6 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0, 1.0])
+        col1, col2, col3, col4, col5 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0])
 
         with col1:
             st.write(f"`{row['line_item']}`")
@@ -322,8 +320,6 @@ for idx, row in enumerate(table_data):
             st.write("—")
         with col5:
             st.write("—")
-        with col6:
-            st.write("🔒 Locked")
 
         edited_items.append({
             'label': row['line_item'],
@@ -339,7 +335,7 @@ for idx, row in enumerate(table_data):
         continue
 
     # Regular line item row
-    col1, col2, col3, col4, col5, col6 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0, 1.0])
+    col1, col2, col3, col4, col5 = st.columns([2.5, 1.1, 1.8, 0.9, 1.0])
 
     original_amount = row['amount']
 
@@ -377,10 +373,6 @@ for idx, row in enumerate(table_data):
         adjusted_amount = original_amount * multiplier_value
         display_text = "same" if adjusted_amount == original_amount else f"{adjusted_amount:,.0f}"
         st.write(f"**{display_text}**")
-
-    with col6:
-        status_text = "🔄 Flipped" if multiplier_value == -1 else "✓"
-        st.write(status_text)
 
     edited_items.append({
         'label': row['line_item'],
